@@ -13,6 +13,7 @@ export async function PATCH(request: NextRequest) {
     await renameEntry(id, newName);
     return NextResponse.json({ success: true });
   } catch (error) {
+    console.error('Rename error:', error);
     return NextResponse.json({ error: 'Failed to rename item' }, { status: 500 });
   }
 }
@@ -20,7 +21,7 @@ export async function PATCH(request: NextRequest) {
 export async function DELETE(request: NextRequest) {
   try {
     const body = await request.json();
-    const { id } = body; // Single ID for now
+    const { id } = body;
 
     if (!id) {
       return NextResponse.json({ error: 'Missing id' }, { status: 400 });
@@ -29,6 +30,7 @@ export async function DELETE(request: NextRequest) {
     await deleteEntry(id);
     return NextResponse.json({ success: true });
   } catch (error) {
+    console.error('Delete error:', error);
     return NextResponse.json({ error: 'Failed to delete item' }, { status: 500 });
   }
 }
