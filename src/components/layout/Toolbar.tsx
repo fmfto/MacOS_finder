@@ -3,10 +3,11 @@
 import { 
   ChevronLeft, ChevronRight, LayoutGrid, List, Columns, 
   Search, Share, ArrowDownAZ, ArrowUpZA, X,
-  Home, ArrowUp
+  Home, ArrowUp, FileUp, FolderUp
 } from 'lucide-react';
 import { useFinderStore } from '@/store/useFinderStore';
 import { useRouter } from 'next/navigation';
+import { useRef } from 'react';
 
 export default function Toolbar() {
   const {
@@ -14,14 +15,31 @@ export default function Toolbar() {
     searchQuery, setSearchQuery,
     sortBy, setSortBy, sortDirection, toggleSortDirection,
     selectedFiles, files, openModal,
-    history
+    history, uploadFiles
   } = useFinderStore();
 
   const router = useRouter();
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const folderInputRef = useRef<HTMLInputElement>(null);
 
   // 히스토리 상태 기반으로 계산
   const canGoBack = history.currentIndex > 0;
   const canGoForward = history.currentIndex < history.paths.length - 1;
+
+  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files.length > 0) {
+      uploadFiles(Array.from(e.target.files));
+    }
+    // Reset input
+    e.target.value = '';
+  };
+
+  const handleFolderUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files.length > 0) {
+      uploadFiles(Array.from(e.target.files));
+    }
+    e.target.value = '';
+  };
 
   const handleBack = () => {
     if (!canGoBack) return;
@@ -277,6 +295,24 @@ export default function Toolbar() {
            </button>
         </div>
 
+        {/* Upload Buttons */}
+        <div className="flex items-center gap-1 mr-2 border-r border-gray-300 pr-2">
+           <button 
+             onClick={() => fileInputRef.current?.click()}
+             className="p-1.5 rounded-md text-finder-text-secondary hover:bg-gray-200/50 hover:text-finder-text-primary transition-colors"
+             title="Upload Files"
+           >
+             <FileUp size={18} />
+           </button>
+           <button 
+             onClick={() => folderInputRef.current?.click()}
+             className="p-1.5 rounded-md text-finder-text-secondary hover:bg-gray-200/50 hover:text-finder-text-primary transition-colors"
+             title="Upload Folder"
+           >
+             <FolderUp size={18} />
+           </button>
+        </div>
+
         {/* Share Button */}
         <button
           onClick={handleShare}
@@ -311,6 +347,25 @@ export default function Toolbar() {
           )}
         </div>
       </div>
+      
+      {/* Hidden Inputs */}
+      <input 
+        type="file" 
+        ref={fileInputRef} 
+        onChange={handleFileUpload} 
+        multiple 
+        className="hidden" 
+      />
+      <input 
+        type="file" 
+        ref={folderInputRef} 
+        onChange={handleFolderUpload} 
+        // @ts-ignore
+        webkitdirectory=""
+        directory=""
+        multiple 
+        className="hidden" 
+      />
     </header>
   );
 }

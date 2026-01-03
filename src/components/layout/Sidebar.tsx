@@ -14,15 +14,6 @@ const SIDEBAR_ITEMS = [
     category: 'Favorites',
     items: [
       { name: 'Recent', icon: Clock, path: '/drive/recent' },
-      { name: 'Documents', icon: FileText, path: '/drive/documents' },
-      { name: 'Downloads', icon: Download, path: '/drive/downloads' },
-    ]
-  },
-  {
-    category: 'Cloud',
-    items: [
-      { name: 'My Drive', icon: Cloud, path: '/drive/my-drive' },
-      { name: 'Shared', icon: Folder, path: '/drive/shared' },
     ]
   },
   {
@@ -107,7 +98,6 @@ export default function Sidebar() {
               {/* Favorites 섹션에 즐겨찾기 폴더 추가 */}
               {sectionIndex === 0 && favoriteFolders.length > 0 && (
                 <>
-                  <li className="h-px bg-finder-border mx-3 my-2" />
                   {favoriteFolders.map((folder) => {
                     if (!folder) return null;
                     const folderPath = getFolderPath(folder.id);
@@ -125,10 +115,9 @@ export default function Sidebar() {
                               }
                             `}
                           >
-                            <Star
+                            <Folder
                               size={16}
-                              className={isActive ? 'text-finder-active' : 'text-yellow-500'}
-                              fill={isActive ? 'currentColor' : '#eab308'}
+                              className={isActive ? 'text-finder-active' : 'text-finder-text-secondary'}
                               strokeWidth={2}
                             />
                             <span className="truncate">{folder.name}</span>

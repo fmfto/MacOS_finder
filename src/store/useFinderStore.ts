@@ -1,8 +1,9 @@
 import { create } from 'zustand';
+import { persist, createJSONStorage } from 'zustand/middleware';
 import { FileNode } from '@/types/file';
-import { toBase64 } from '@/lib/utils';
+import { toBase64, fromBase64 } from '@/lib/utils';
 
-// --- Types ---
+// ... (Types remain same)
 interface ContextMenuData {
   isOpen: boolean;
   x: number;
@@ -362,6 +363,38 @@ export const useFinderStore = create<FinderState>((set, get) => ({
       });
       if (!res.ok) throw new Error('Rename failed');
       
+      // [Update Favorites Logic]
+      // Rename 시 ID가 바뀌므로(ID가 경로 기반), 즐겨찾기에 등록된 ID도 갱신해야 함.
+      const { favorites } = get();
+      const oldPath = fileId === 'root' ? '' : fromBase64(fileId);
+      
+      // 부모 경로 찾기 (oldPath: "A/B/OldName" -> parent: "A/B")
+      const parts = oldPath.split('/');
+      const parentPath = parts.length > 1 ? parts.slice(0, -1).join('/') : '';
+      const newPath = parentPath ? `${parentPath}/${newName}` : newName;
+      
+      // 즐겨찾기 목록 중 oldPath로 시작하는 것들을 찾아서 업데이트
+      const newFavorites = favorites.map(favId => {
+        if (favId === fileId) {
+          // 1. 자기 자신이 즐겨찾기인 경우
+          return toBase64(newPath);
+        }
+        
+        // 2. 하위 폴더가 즐겨찾기인 경우 (경로가 변경되었으므로 ID도 변경)
+        const favPath = fromBase64(favId);
+        if (favPath.startsWith(`${oldPath}/`)) {
+          // oldPath 뒷부분을 잘라내고 newPath에 붙임
+          const suffix = favPath.substring(oldPath.length);
+          return toBase64(`${newPath}${suffix}`);
+        }
+        
+        return favId;
+      });
+
+      // 스토어 업데이트 (favorites 갱신)
+      set({ favorites: newFavorites });
+
+      // 목록 새로고침
       get().fetchFiles(get().currentPath);
     } catch (e) {
       console.error(e);
@@ -448,7 +481,22 @@ export const useFinderStore = create<FinderState>((set, get) => ({
     for (const file of uploadedFiles) {
       const formData = new FormData();
       formData.append('file', file);
-      formData.append('path', pathString); // server expects 'path'
+      
+      let finalPath = pathString;
+      
+      // Handle folder upload (webkitRelativePath)
+      // @ts-ignore - webkitRelativePath is not in standard File definition but exists in browsers
+      const relativePath = file.webkitRelativePath;
+      if (relativePath) {
+        // e.g. "MyFolder/Sub/File.txt" -> dir: "MyFolder/Sub"
+        const parts = relativePath.split('/');
+        if (parts.length > 1) {
+           const dirPart = parts.slice(0, -1).join('/');
+           finalPath = pathString ? `${pathString}/${dirPart}` : dirPart;
+        }
+      }
+
+      formData.append('path', finalPath); // server expects 'path'
 
       try {
         await fetch('/api/drive/upload', {

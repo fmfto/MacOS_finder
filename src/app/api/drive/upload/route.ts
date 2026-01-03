@@ -15,6 +15,10 @@ export async function POST(request: NextRequest) {
 
     const currentPath = pathParam.split('/').filter(Boolean);
     const targetDir = getSafePath(currentPath);
+    
+    // 폴더가 없으면 생성 (recursive)
+    await fs.mkdir(targetDir, { recursive: true });
+
     const arrayBuffer = await file.arrayBuffer();
     const buffer = Buffer.from(arrayBuffer);
     

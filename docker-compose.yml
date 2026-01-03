@@ -6,7 +6,7 @@ services:
     build: .
     restart: always
     ports:
-      - "3000:3000"
+      - "3001:3000"
     environment:
       # 앱이 컨테이너 내부에서 바라보는 경로 (고정)
       - NAS_ROOT_DIR=/data

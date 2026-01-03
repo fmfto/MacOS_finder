@@ -15,3 +15,12 @@ export const toBase64 = (str: string) => {
     return '';
   }
 };
+
+export const fromBase64 = (str: string) => {
+  try {
+    return decodeURIComponent(escape(atob(str)));
+  } catch (e) {
+    console.error('Base64 decode failed', e);
+    return '';
+  }
+};
