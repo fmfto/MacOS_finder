@@ -7,7 +7,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "build": "next build --no-lint --no-mangling"
+    "build": "next build"
   },
   "dependencies": {
     "clsx": "^2.1.1",
