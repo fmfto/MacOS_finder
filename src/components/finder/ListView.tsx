@@ -7,6 +7,7 @@ import { formatSize, formatDate } from '@/lib/format';
 import { useRouter, usePathname } from 'next/navigation';
 import { useRef, useEffect } from 'react';
 import { useBoxSelection } from '@/hooks/useBoxSelection';
+import { fromBase64 } from '@/lib/utils'; // [Import]
 
 import { setDragGhost } from '@/lib/dragUtils';
 
@@ -32,6 +33,7 @@ export default function ListView({ files }: ListViewProps) {
     files: allFiles,
     focusedFileId,
     setVisibleFiles,
+    tags // [Store]
   } = useFinderStore();
   const router = useRouter();
   const pathname = usePathname();
@@ -253,6 +255,25 @@ export default function ListView({ files }: ListViewProps) {
                 <td className="pl-4 py-1 flex items-center gap-2 overflow-hidden">
                   <div className="flex-shrink-0"><FileIcon file={file} size={16} /></div>
                   <span className="truncate font-medium">{decodeURIComponent(file.name)}</span>
+                  
+                  {/* [Tags Display] */}
+                  {(() => {
+                    const filePath = file.id === 'root' ? '' : fromBase64(file.id);
+                    const fileTags = tags[filePath] || [];
+                    if (fileTags.length === 0) return null;
+                    return (
+                      <div className="flex items-center gap-1 ml-2">
+                        {fileTags.map(color => (
+                          <div 
+                            key={color} 
+                            className="w-2 h-2 rounded-full shadow-sm border border-black/5" 
+                            style={{ backgroundColor: color.toLowerCase() }} 
+                            title={color}
+                          />
+                        ))}
+                      </div>
+                    );
+                  })()}
                 </td>
                 <td className={`py-1 whitespace-nowrap ${isSelected ? 'text-white' : 'text-finder-text-secondary'}`}>{formatDate(file.updatedAt)}</td>
                 <td className={`py-1 whitespace-nowrap ${isSelected ? 'text-white' : 'text-finder-text-secondary'}`}>{formatSize(file.size)}</td>

@@ -57,8 +57,67 @@ interface FinderState {
   // Data
   files: FileNode[];
   isLoading: boolean;
+  tags: Record<string, string[]>; // [Path]: ["Red", "Blue"]
 
   // UI State
+  // ... (기존 생략) ...
+
+  // Actions
+  fetchFiles: (pathSegments: string[]) => Promise<void>;
+  fetchTags: () => Promise<void>;
+  updateTags: (path: string, newTags: string[]) => Promise<void>;
+  
+  // ... (나머지 생략) ...
+}
+
+export const useFinderStore = create<FinderState>()(persist((set, get) => ({
+  // Initial State
+  files: [],
+  isLoading: false,
+  tags: {},
+  // ... (나머지 초기값) ...
+
+  // Implementation
+  fetchTags: async () => {
+    try {
+      const res = await fetch('/api/drive/tags');
+      if (res.ok) {
+        const tags = await res.json();
+        set({ tags });
+      }
+    } catch (e) {
+      console.error(e);
+    }
+  },
+
+  updateTags: async (path, newTags) => {
+    // Optimistic Update
+    set((state) => ({
+      tags: { ...state.tags, [path]: newTags }
+    }));
+
+    try {
+      await fetch('/api/drive/tags', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ path, tags: newTags })
+      });
+      // 성공 시 별도 처리 필요 없음 (이미 반영됨)
+    } catch (e) {
+      console.error(e);
+      // Rollback logic could be added here
+      get().fetchTags(); // Revert to server state
+    }
+  },
+
+  fetchFiles: async (pathSegments) => {
+    // ... (기존 fetchFiles)
+    // 파일을 가져올 때 태그도 같이 갱신하면 좋음
+    get().fetchTags();
+    
+    set({ isLoading: true });
+    // ... (기존 로직 유지)
+
   currentPath: string[];
   viewMode: 'grid' | 'list' | 'columns';
   selectedFiles: Set<string>;
@@ -185,8 +244,42 @@ export const useFinderStore = create<FinderState>((set, get) => ({
   isNavigatingHistory: false,
 
   // Implementation
+  fetchTags: async () => {
+    try {
+      const res = await fetch('/api/drive/tags');
+      if (res.ok) {
+        const tags = await res.json();
+        set({ tags });
+      }
+    } catch (e) {
+      console.error(e);
+    }
+  },
+
+  updateTags: async (path, newTags) => {
+    // Optimistic Update
+    set((state) => ({
+      tags: { ...state.tags, [path]: newTags }
+    }));
+
+    try {
+      await fetch('/api/drive/tags', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ path, tags: newTags })
+      });
+    } catch (e) {
+      console.error(e);
+      get().fetchTags();
+    }
+  },
+
   fetchFiles: async (pathSegments) => {
+    // Refresh tags when fetching files
+    get().fetchTags();
+    
     set({ isLoading: true });
+
     try {
       // Construct all paths to fetch (ancestors + current)
       // e.g. ['root', 'A', 'B'] -> ['', 'A', 'A/B'] (relative to root)

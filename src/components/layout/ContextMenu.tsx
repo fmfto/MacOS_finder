@@ -2,6 +2,9 @@
 
 import { useFinderStore } from '@/store/useFinderStore';
 import { useEffect, useRef } from 'react';
+import { fromBase64 } from '@/lib/utils';
+
+const TAG_COLORS = ['Red', 'Orange', 'Yellow', 'Green', 'Blue', 'Purple', 'Gray'];
 
 export default function ContextMenu() {
   const {
@@ -23,11 +26,13 @@ export default function ContextMenu() {
     files,
     addToFavorites,
     removeFromFavorites,
-    favorites
+    favorites,
+    tags,
+    updateTags
   } = useFinderStore();
   const menuRef = useRef<HTMLDivElement>(null);
 
-  // ... 외부 클릭 감지 로직 유지 ...
+  // ... (useEffect 등 기존 코드 유지) ...
   useEffect(() => {
     const handleClick = (e: MouseEvent) => {
       if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
@@ -42,7 +47,7 @@ export default function ContextMenu() {
 
   const { x, y, targetId } = contextMenu;
 
-  // 현재 폴더의 parentId 찾기 (붙여넣기용)
+  // ... (getCurrentParentId 등 기존 함수 유지) ...
   const getCurrentParentId = () => {
     if (currentPath.length === 0 || currentPath[0] === 'root') return 'root';
     if (currentPath[0] === 'recent' || currentPath[0] === 'trash') return null; // 가상 뷰에서는 붙여넣기 불가
@@ -59,12 +64,9 @@ export default function ContextMenu() {
     return currentParentId;
   };
 
-  // 현재 휴지통 뷰인지 확인
   const isTrashView = currentPath.length > 0 && currentPath[0] === 'trash';
 
-  // 다중 선택된 파일들에 대한 메뉴
   const getMenuItems = () => {
-    // targetId가 없어도 선택된 파일이 있으면 다중 선택으로 처리
     const hasMultipleSelection = selectedFiles.size > 1;
     const hasSelection = selectedFiles.size > 0;
     const fileIds = hasSelection ? Array.from(selectedFiles) : (targetId ? [targetId] : []);
@@ -72,9 +74,13 @@ export default function ContextMenu() {
     const isFolder = targetFile?.type === 'folder';
     const isFavorited = targetFile && favorites.includes(targetFile.id);
 
-    // 휴지통 뷰에서의 메뉴
+    // 태그 관련 정보
+    const targetPath = targetId ? (targetId === 'root' ? '' : fromBase64(targetId)) : '';
+    const currentTags = targetPath ? (tags[targetPath] || []) : [];
+
     if (isTrashView) {
-      if (targetId || hasSelection) {
+       // ... (휴지통 메뉴 유지) ...
+       if (targetId || hasSelection) {
         return [
           {
             label: hasMultipleSelection ? `Restore ${selectedFiles.size} Items` : 'Put Back',
@@ -93,7 +99,6 @@ export default function ContextMenu() {
           },
         ];
       } else {
-        // 휴지통 배경 메뉴
         return [
           {
             label: 'Empty Trash',
@@ -109,14 +114,26 @@ export default function ContextMenu() {
       }
     }
 
-    // 일반 파일/폴더 메뉴
     if (targetId || hasSelection) {
       return [
+        // 1. Tags Palette (맨 위에 배치)
+        ...(hasMultipleSelection ? [] : [{
+          type: 'tags',
+          currentTags,
+          onToggle: (color: string) => {
+            const newTags = currentTags.includes(color) 
+              ? currentTags.filter(t => t !== color)
+              : [...currentTags, color];
+            updateTags(targetPath, newTags);
+          },
+          separator: true
+        }]),
+
         ...(hasMultipleSelection || !targetId ? [] : [
           { label: 'Open', action: () => {
             const file = files.find(f => f.id === targetId);
             if (file && file.type === 'folder') {
-              // 폴더 열기는 라우터로 처리해야 함
+               // handled by router
             } else if (file && file.type === 'file') {
               openPreview(targetId);
             }
@@ -131,7 +148,7 @@ export default function ContextMenu() {
           }},
         ]),
         { label: 'Get Info', action: () => openModal('info', targetId || fileIds[0]) },
-        // 폴더인 경우 즐겨찾기 추가/제거
+        // ... (나머지 메뉴 유지) ...
         ...(isFolder && !hasMultipleSelection ? [
           {
             label: isFavorited ? 'Remove from Favorites' : 'Add to Favorites',
@@ -191,15 +208,42 @@ export default function ContextMenu() {
   const menuItems = getMenuItems();
 
   return (
-    // ... JSX 구조 유지 (div, map 등) ...
     <div 
       ref={menuRef}
       className="fixed z-50 w-48 bg-white/95 backdrop-blur-xl rounded-lg shadow-xl border border-black/10 py-1.5 select-none text-[13px] overflow-hidden"
       style={{ top: y, left: x }}
       onContextMenu={(e) => e.preventDefault()}
     >
-      {menuItems.map((item, index) => {
-        // separator 아이템 처리
+      {menuItems.map((item: any, index: number) => {
+        // [New] Tags Palette Rendering
+        if (item.type === 'tags') {
+          return (
+            <div key={index}>
+              <div className="px-3 py-2 flex justify-between items-center gap-1">
+                {TAG_COLORS.map(color => {
+                  const isActive = item.currentTags.includes(color);
+                  return (
+                    <button
+                      key={color}
+                      onClick={(e) => {
+                        e.stopPropagation(); // 메뉴 닫지 않음 (여러 개 선택 가능하게)
+                        item.onToggle(color);
+                      }}
+                      className={`
+                        w-4 h-4 rounded-full border transition-all
+                        ${isActive ? 'scale-110 border-gray-400 shadow-sm' : 'border-black/5 hover:scale-110'}
+                      `}
+                      style={{ backgroundColor: color.toLowerCase() }}
+                      title={color}
+                    />
+                  );
+                })}
+              </div>
+              {item.separator && <div className="h-[1px] bg-gray-200 my-1 mx-3" />}
+            </div>
+          );
+        }
+
         if (item.label === 'separator') {
           return <div key={index} className="h-[1px] bg-gray-200 my-1 mx-3" />;
         }
@@ -207,7 +251,6 @@ export default function ContextMenu() {
           <div key={index}>
             <button
               onClick={() => {
-                // @ts-ignore
                 if (item.disabled) return;
                 item.action();
                 closeContextMenu();
@@ -222,7 +265,6 @@ export default function ContextMenu() {
             >
               <span>{item.label}</span>
             </button>
-            {/* @ts-ignore */}
             {item.separator && <div className="h-[1px] bg-gray-200 my-1 mx-3" />}
           </div>
         );
