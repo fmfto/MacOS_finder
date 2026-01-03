@@ -121,7 +121,7 @@ interface FinderState {
   endDrag: () => void;
   setDragOver: (fileId: string | null) => void;
   moveFiles: (fileIds: string[], targetParentId: string) => void;
-  uploadFiles: (files: File[]) => Promise<void>;
+  uploadFiles: (files: File[], parentId?: string) => Promise<void>;
   
   // Box Selection
   startBoxSelection: (x: number, y: number) => void;
@@ -412,10 +412,36 @@ export const useFinderStore = create<FinderState>((set, get) => ({
     // Implement move API if needed
   },
 
-  uploadFiles: async (uploadedFiles) => {
+  uploadFiles: async (uploadedFiles, targetParentId) => {
     const { currentPath } = get();
-    const apiPath = (currentPath[0] === 'root') ? currentPath.slice(1) : currentPath;
-    const pathString = apiPath.join('/');
+    
+    // Determine path string for API
+    let pathString = '';
+    
+    if (targetParentId) {
+      // If a specific parentId (folder ID) is provided, we need to find its path?
+      // SERVER API expects 'path' string (e.g. "A/B"), not ID.
+      // This is tricky because we only have ID (Base64) here.
+      // But wait, our ID IS the Base64 encoded relative path!
+      // So we can decode it.
+      if (targetParentId === 'root') {
+        pathString = '';
+      } else {
+        try {
+          // Decode Base64 ID back to path string
+          pathString = decodeURIComponent(escape(atob(targetParentId)));
+        } catch (e) {
+          console.error('Failed to decode folder ID', e);
+          return;
+        }
+      }
+    } else {
+      // Default to current path
+      const apiPath = (currentPath.length > 0 && currentPath[0] === 'root') 
+        ? currentPath.slice(1) 
+        : currentPath;
+      pathString = apiPath.join('/');
+    }
 
     // Upload sequentially or parallel
     for (const file of uploadedFiles) {
@@ -433,7 +459,10 @@ export const useFinderStore = create<FinderState>((set, get) => ({
       }
     }
     
-    get().fetchFiles(currentPath);
+    // Refresh current path files
+    // If we uploaded to a different folder, we might want to refresh that folder too?
+    // For now, just refresh current view.
+    get().fetchFiles(get().currentPath);
   },
 
   copyFiles: (fileIds) => set({ clipboard: { type: 'copy', fileIds } }),
