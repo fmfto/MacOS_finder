@@ -3,11 +3,11 @@
 import { 
   ChevronLeft, ChevronRight, LayoutGrid, List, Columns, 
   Search, Share, ArrowDownAZ, ArrowUpZA, X,
-  Home, ArrowUp, FileUp, FolderUp
+  Home, ArrowUp, FileUp, FolderUp, Plus, Download
 } from 'lucide-react';
 import { useFinderStore } from '@/store/useFinderStore';
 import { useRouter } from 'next/navigation';
-import { useRef } from 'react';
+import { useRef, useState, useEffect } from 'react';
 
 export default function Toolbar() {
   const {
@@ -15,12 +15,25 @@ export default function Toolbar() {
     searchQuery, setSearchQuery,
     sortBy, setSortBy, sortDirection, toggleSortDirection,
     selectedFiles, files, openModal,
-    history, uploadFiles
+    history, uploadFiles, downloadFile
   } = useFinderStore();
 
   const router = useRouter();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const folderInputRef = useRef<HTMLInputElement>(null);
+  const [isUploadMenuOpen, setIsUploadMenuOpen] = useState(false);
+  const menuRef = useRef<HTMLDivElement>(null);
+
+  // 메뉴 외부 클릭 감지
+  useEffect(() => {
+    const handleClick = (e: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
+        setIsUploadMenuOpen(false);
+      }
+    };
+    window.addEventListener('mousedown', handleClick);
+    return () => window.removeEventListener('mousedown', handleClick);
+  }, []);
 
   // 히스토리 상태 기반으로 계산
   const canGoBack = history.currentIndex > 0;
@@ -30,8 +43,8 @@ export default function Toolbar() {
     if (e.target.files && e.target.files.length > 0) {
       uploadFiles(Array.from(e.target.files));
     }
-    // Reset input
     e.target.value = '';
+    setIsUploadMenuOpen(false);
   };
 
   const handleFolderUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -39,6 +52,19 @@ export default function Toolbar() {
       uploadFiles(Array.from(e.target.files));
     }
     e.target.value = '';
+    setIsUploadMenuOpen(false);
+  };
+
+  const handleDownload = () => {
+    if (selectedFiles.size === 0) return;
+    const fileId = Array.from(selectedFiles)[0];
+    const file = files.find(f => f.id === fileId);
+    
+    if (file && file.type === 'file') {
+      downloadFile(fileId);
+    } else {
+      alert('Downloading folders is not supported yet.');
+    }
   };
 
   const handleBack = () => {
@@ -295,21 +321,44 @@ export default function Toolbar() {
            </button>
         </div>
 
-        {/* Upload Buttons */}
+        {/* Upload & Download Group */}
         <div className="flex items-center gap-1 mr-2 border-r border-gray-300 pr-2">
+           {/* Upload Menu */}
+           <div className="relative" ref={menuRef}>
+             <button 
+               onClick={() => setIsUploadMenuOpen(!isUploadMenuOpen)}
+               className={`p-1.5 rounded-md transition-colors ${isUploadMenuOpen ? 'bg-gray-200 text-finder-text-primary' : 'text-finder-text-secondary hover:bg-gray-200/50 hover:text-finder-text-primary'}`}
+               title="New"
+             >
+               <Plus size={18} />
+             </button>
+             
+             {isUploadMenuOpen && (
+               <div className="absolute top-full left-0 mt-1 w-32 bg-white rounded-lg shadow-xl border border-gray-200 py-1 z-50 overflow-hidden flex flex-col">
+                 <button 
+                   onClick={() => fileInputRef.current?.click()}
+                   className="px-3 py-2 text-left text-sm hover:bg-finder-hover flex items-center gap-2 text-gray-700"
+                 >
+                   <FileUp size={14} /> File
+                 </button>
+                 <button 
+                   onClick={() => folderInputRef.current?.click()}
+                   className="px-3 py-2 text-left text-sm hover:bg-finder-hover flex items-center gap-2 text-gray-700"
+                 >
+                   <FolderUp size={14} /> Folder
+                 </button>
+               </div>
+             )}
+           </div>
+
+           {/* Download Button */}
            <button 
-             onClick={() => fileInputRef.current?.click()}
-             className="p-1.5 rounded-md text-finder-text-secondary hover:bg-gray-200/50 hover:text-finder-text-primary transition-colors"
-             title="Upload Files"
+             onClick={handleDownload}
+             disabled={selectedFiles.size === 0}
+             className={`p-1.5 rounded-md transition-colors ${selectedFiles.size === 0 ? 'opacity-30 cursor-default text-finder-text-secondary' : 'text-finder-text-secondary hover:bg-gray-200/50 hover:text-finder-text-primary'}`}
+             title="Download"
            >
-             <FileUp size={18} />
-           </button>
-           <button 
-             onClick={() => folderInputRef.current?.click()}
-             className="p-1.5 rounded-md text-finder-text-secondary hover:bg-gray-200/50 hover:text-finder-text-primary transition-colors"
-             title="Upload Folder"
-           >
-             <FolderUp size={18} />
+             <Download size={18} />
            </button>
         </div>
 

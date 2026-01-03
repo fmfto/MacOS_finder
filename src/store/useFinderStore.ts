@@ -183,6 +183,7 @@ export const useFinderStore = create<FinderState>()(persist((set, get) => ({
   moveFiles: (fileIds: string[], targetParentId: string) => void;
   // @ts-ignore - Allow any arguments for now to fix build
   uploadFiles: (files: File[], parentId?: any) => Promise<void>;
+  downloadFile: (fileId: string) => void;
   
   // Box Selection
   startBoxSelection: (x: number, y: number) => void;
@@ -539,23 +540,28 @@ export const useFinderStore = create<FinderState>((set, get) => ({
     // Implement move API if needed
   },
 
+  downloadFile: (fileId) => {
+    const url = `/api/drive/download?id=${encodeURIComponent(fileId)}`;
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = '';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  },
+
   uploadFiles: async (uploadedFiles, targetParentId) => {
+    console.log('Upload started:', uploadedFiles.length, 'files', 'Target:', targetParentId);
     const { currentPath } = get();
     
     // Determine path string for API
     let pathString = '';
     
     if (targetParentId) {
-      // If a specific parentId (folder ID) is provided, we need to find its path?
-      // SERVER API expects 'path' string (e.g. "A/B"), not ID.
-      // This is tricky because we only have ID (Base64) here.
-      // But wait, our ID IS the Base64 encoded relative path!
-      // So we can decode it.
       if (targetParentId === 'root') {
         pathString = '';
       } else {
         try {
-          // Decode Base64 ID back to path string
           pathString = decodeURIComponent(escape(atob(targetParentId)));
         } catch (e) {
           console.error('Failed to decode folder ID', e);
@@ -563,12 +569,13 @@ export const useFinderStore = create<FinderState>((set, get) => ({
         }
       }
     } else {
-      // Default to current path
       const apiPath = (currentPath.length > 0 && currentPath[0] === 'root') 
         ? currentPath.slice(1) 
         : currentPath;
       pathString = apiPath.join('/');
     }
+
+    console.log('Base upload path:', pathString);
 
     // Upload sequentially or parallel
     for (const file of uploadedFiles) {
@@ -578,32 +585,30 @@ export const useFinderStore = create<FinderState>((set, get) => ({
       let finalPath = pathString;
       
       // Handle folder upload (webkitRelativePath)
-      // @ts-ignore - webkitRelativePath is not in standard File definition but exists in browsers
+      // @ts-ignore
       const relativePath = file.webkitRelativePath;
       if (relativePath) {
-        // e.g. "MyFolder/Sub/File.txt" -> dir: "MyFolder/Sub"
         const parts = relativePath.split('/');
         if (parts.length > 1) {
            const dirPart = parts.slice(0, -1).join('/');
            finalPath = pathString ? `${pathString}/${dirPart}` : dirPart;
         }
       }
-
-      formData.append('path', finalPath); // server expects 'path'
+      
+      console.log('Uploading file:', file.name, 'to', finalPath);
+      formData.append('path', finalPath);
 
       try {
-        await fetch('/api/drive/upload', {
+        const res = await fetch('/api/drive/upload', {
           method: 'POST',
           body: formData,
         });
+        if (!res.ok) throw new Error(await res.text());
       } catch (e) {
         console.error(`Failed to upload ${file.name}`, e);
       }
     }
     
-    // Refresh current path files
-    // If we uploaded to a different folder, we might want to refresh that folder too?
-    // For now, just refresh current view.
     get().fetchFiles(get().currentPath);
   },
 
