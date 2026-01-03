@@ -3,7 +3,7 @@ import { persist, createJSONStorage } from 'zustand/middleware';
 import { FileNode } from '@/types/file';
 import { toBase64, fromBase64 } from '@/lib/utils';
 
-// ... (Types remain same)
+// --- Types ---
 interface ContextMenuData {
   isOpen: boolean;
   x: number;
@@ -57,67 +57,9 @@ interface FinderState {
   // Data
   files: FileNode[];
   isLoading: boolean;
-  tags: Record<string, string[]>; // [Path]: ["Red", "Blue"]
+  tags: Record<string, string[]>;
 
   // UI State
-  // ... (기존 생략) ...
-
-  // Actions
-  fetchFiles: (pathSegments: string[]) => Promise<void>;
-  fetchTags: () => Promise<void>;
-  updateTags: (path: string, newTags: string[]) => Promise<void>;
-  
-  // ... (나머지 생략) ...
-}
-
-export const useFinderStore = create<FinderState>()(persist((set, get) => ({
-  // Initial State
-  files: [],
-  isLoading: false,
-  tags: {},
-  // ... (나머지 초기값) ...
-
-  // Implementation
-  fetchTags: async () => {
-    try {
-      const res = await fetch('/api/drive/tags');
-      if (res.ok) {
-        const tags = await res.json();
-        set({ tags });
-      }
-    } catch (e) {
-      console.error(e);
-    }
-  },
-
-  updateTags: async (path, newTags) => {
-    // Optimistic Update
-    set((state) => ({
-      tags: { ...state.tags, [path]: newTags }
-    }));
-
-    try {
-      await fetch('/api/drive/tags', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ path, tags: newTags })
-      });
-      // 성공 시 별도 처리 필요 없음 (이미 반영됨)
-    } catch (e) {
-      console.error(e);
-      // Rollback logic could be added here
-      get().fetchTags(); // Revert to server state
-    }
-  },
-
-  fetchFiles: async (pathSegments) => {
-    // ... (기존 fetchFiles)
-    // 파일을 가져올 때 태그도 같이 갱신하면 좋음
-    get().fetchTags();
-    
-    set({ isLoading: true });
-    // ... (기존 로직 유지)
-
   currentPath: string[];
   viewMode: 'grid' | 'list' | 'columns';
   selectedFiles: Set<string>;
@@ -144,6 +86,9 @@ export const useFinderStore = create<FinderState>()(persist((set, get) => ({
 
   // Actions
   fetchFiles: (pathSegments: string[]) => Promise<void>;
+  fetchTags: () => Promise<void>;
+  updateTags: (path: string, newTags: string[]) => Promise<void>;
+  
   setPath: (path: string[]) => void;
   navigateUp: () => void;
   setViewMode: (mode: 'grid' | 'list' | 'columns') => void;
@@ -164,7 +109,7 @@ export const useFinderStore = create<FinderState>()(persist((set, get) => ({
   renameFile: (fileId: string, newName: string) => void;
   createFolder: (name: string) => Promise<void>;
   
-  // Copy/Cut/Paste (Not fully implemented on server side yet for this demo)
+  // Copy/Cut/Paste
   copyFiles: (fileIds: string[]) => void;
   cutFiles: (fileIds: string[]) => void;
   pasteFiles: (targetParentId: string) => void;
@@ -213,11 +158,11 @@ export const useFinderStore = create<FinderState>()(persist((set, get) => ({
   isFavorite: (folderId: string) => boolean;
 }
 
-
-export const useFinderStore = create<FinderState>((set, get) => ({
-  // ... (Initial State same as before)
+export const useFinderStore = create<FinderState>()(persist((set, get) => ({
+  // Initial State
   files: [],
   isLoading: false,
+  tags: {},
   currentPath: [],
   viewMode: 'grid',
   selectedFiles: new Set(),
@@ -276,20 +221,12 @@ export const useFinderStore = create<FinderState>((set, get) => ({
   },
 
   fetchFiles: async (pathSegments) => {
-    // Refresh tags when fetching files
     get().fetchTags();
-    
     set({ isLoading: true });
-
     try {
-      // Construct all paths to fetch (ancestors + current)
-      // e.g. ['root', 'A', 'B'] -> ['', 'A', 'A/B'] (relative to root)
       const pathsToFetch: string[] = [];
-      
-      // 1. Root level
       pathsToFetch.push('');
 
-      // 2. Sub-levels
       if (pathSegments.length > 1) {
         let currentPathStr = '';
         for (let i = 1; i < pathSegments.length; i++) {
@@ -299,7 +236,6 @@ export const useFinderStore = create<FinderState>((set, get) => ({
         }
       }
 
-      // Fetch all levels in parallel
       const responses = await Promise.all(
         pathsToFetch.map(async (p) => {
           const res = await fetch(`/api/drive?path=${encodeURIComponent(p)}`);
@@ -327,7 +263,6 @@ export const useFinderStore = create<FinderState>((set, get) => ({
       });
 
       set((state) => ({
-        // Remove existing files for the fetched directories to prevent duplicates/stale data
         files: [
           ...state.files.filter(f => !fetchedParentIds.has(f.parentId)),
           ...allNewFiles
@@ -342,7 +277,6 @@ export const useFinderStore = create<FinderState>((set, get) => ({
   },
 
   setPath: (path) => {
-    // ... (rest same as before)
     const { history, isNavigatingHistory, currentPath } = get();
 
     if (JSON.stringify(currentPath) === JSON.stringify(path)) {
@@ -350,7 +284,6 @@ export const useFinderStore = create<FinderState>((set, get) => ({
       return;
     }
 
-    // 서버에서 파일 가져오기
     get().fetchFiles(path);
 
     if (isNavigatingHistory) {
@@ -362,8 +295,7 @@ export const useFinderStore = create<FinderState>((set, get) => ({
       });
       return;
     }
-    
-    // ... (rest same)
+
     if (JSON.stringify(history.paths[history.currentIndex]) === JSON.stringify(path)) {
       set({
         currentPath: path,
@@ -384,14 +316,9 @@ export const useFinderStore = create<FinderState>((set, get) => ({
       focusedFileId: null,
     });
   },
-  // ... (rest of the file remains same)
   navigateUp: () => {
     const { currentPath } = get();
-    // root이거나 비어있으면 상위가 없음
     if (currentPath.length <= 1 && currentPath[0] === 'root') return;
-    
-    // ['root', 'folder', 'sub'] -> ['root', 'folder']
-    // ['root'] -> return
     const newPath = currentPath.length > 0 ? currentPath.slice(0, -1) : ['root'];
     get().setPath(newPath);
   },
@@ -425,7 +352,6 @@ export const useFinderStore = create<FinderState>((set, get) => ({
   openContextMenu: (x, y, targetId) => set({ contextMenu: { isOpen: true, x, y, targetId } }),
   closeContextMenu: () => set({ contextMenu: { isOpen: false, x: 0, y: 0, targetId: null } }),
 
-  // [Server] Trash implementation skipped for now. Directly delete.
   moveFileToTrash: (fileId) => get().permanentlyDelete(fileId),
   restoreFromTrash: (fileId) => console.warn('Restore not implemented'),
   emptyTrash: () => console.warn('Empty trash not implemented'),
@@ -439,7 +365,6 @@ export const useFinderStore = create<FinderState>((set, get) => ({
       });
       if (!res.ok) throw new Error('Delete failed');
       
-      // Refresh
       get().fetchFiles(get().currentPath);
       set((state) => ({ selectedFiles: new Set() }));
     } catch (e) {
@@ -457,27 +382,21 @@ export const useFinderStore = create<FinderState>((set, get) => ({
       });
       if (!res.ok) throw new Error('Rename failed');
       
-      // [Update Favorites Logic]
-      // Rename 시 ID가 바뀌므로(ID가 경로 기반), 즐겨찾기에 등록된 ID도 갱신해야 함.
+      // Update Favorites Logic
       const { favorites } = get();
       const oldPath = fileId === 'root' ? '' : fromBase64(fileId);
       
-      // 부모 경로 찾기 (oldPath: "A/B/OldName" -> parent: "A/B")
       const parts = oldPath.split('/');
       const parentPath = parts.length > 1 ? parts.slice(0, -1).join('/') : '';
       const newPath = parentPath ? `${parentPath}/${newName}` : newName;
       
-      // 즐겨찾기 목록 중 oldPath로 시작하는 것들을 찾아서 업데이트
       const newFavorites = favorites.map(favId => {
         if (favId === fileId) {
-          // 1. 자기 자신이 즐겨찾기인 경우
           return toBase64(newPath);
         }
         
-        // 2. 하위 폴더가 즐겨찾기인 경우 (경로가 변경되었으므로 ID도 변경)
         const favPath = fromBase64(favId);
         if (favPath.startsWith(`${oldPath}/`)) {
-          // oldPath 뒷부분을 잘라내고 newPath에 붙임
           const suffix = favPath.substring(oldPath.length);
           return toBase64(`${newPath}${suffix}`);
         }
@@ -485,10 +404,7 @@ export const useFinderStore = create<FinderState>((set, get) => ({
         return favId;
       });
 
-      // 스토어 업데이트 (favorites 갱신)
       set({ favorites: newFavorites });
-
-      // 목록 새로고침
       get().fetchFiles(get().currentPath);
     } catch (e) {
       console.error(e);
@@ -498,15 +414,6 @@ export const useFinderStore = create<FinderState>((set, get) => ({
 
   createFolder: async (name) => {
     const { currentPath } = get();
-    // Remove 'root' from path segments for API if present at start, 
-    // but our API handles pathSegments correctly.
-    // Actually currentPath usually includes 'root' as first element in frontend logic?
-    // Let's check initial state: paths: [['root']].
-    // Yes.
-    // API Expects: pathSegments (array).
-    // If currentPath is ['root'], API path should be [].
-    // If currentPath is ['root', 'A'], API path should be ['A'].
-    
     const apiPath = (currentPath[0] === 'root') ? currentPath.slice(1) : currentPath;
 
     try {
@@ -534,27 +441,14 @@ export const useFinderStore = create<FinderState>((set, get) => ({
   setDragOver: (fileId) => set((state) => ({ 
     dragState: { ...state.dragState, dragOverFileId: fileId } 
   })),
-  
   moveFiles: (fileIds, targetParentId) => {
     console.warn('Move not implemented fully on server yet');
-    // Implement move API if needed
-  },
-
-  downloadFile: (fileId) => {
-    const url = `/api/drive/download?id=${encodeURIComponent(fileId)}`;
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = '';
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
   },
 
   uploadFiles: async (uploadedFiles, targetParentId) => {
     console.log('Upload started:', uploadedFiles.length, 'files', 'Target:', targetParentId);
     const { currentPath } = get();
     
-    // Determine path string for API
     let pathString = '';
     
     if (targetParentId) {
@@ -577,14 +471,12 @@ export const useFinderStore = create<FinderState>((set, get) => ({
 
     console.log('Base upload path:', pathString);
 
-    // Upload sequentially or parallel
     for (const file of uploadedFiles) {
       const formData = new FormData();
       formData.append('file', file);
       
       let finalPath = pathString;
       
-      // Handle folder upload (webkitRelativePath)
       // @ts-ignore
       const relativePath = file.webkitRelativePath;
       if (relativePath) {
@@ -610,6 +502,16 @@ export const useFinderStore = create<FinderState>((set, get) => ({
     }
     
     get().fetchFiles(get().currentPath);
+  },
+
+  downloadFile: (fileId) => {
+    const url = `/api/drive/download?id=${encodeURIComponent(fileId)}`;
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = '';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
   },
 
   copyFiles: (fileIds) => set({ clipboard: { type: 'copy', fileIds } }),
@@ -693,7 +595,6 @@ export const useFinderStore = create<FinderState>((set, get) => ({
     if (history.currentIndex > 0) {
       const newIndex = history.currentIndex - 1;
       const newPath = history.paths[newIndex];
-      // setPath will handle fetching
       set({ isNavigatingHistory: true }); 
       get().setPath(newPath);
       set({ history: { ...history, currentIndex: newIndex } });
@@ -728,4 +629,16 @@ export const useFinderStore = create<FinderState>((set, get) => ({
     const { favorites } = get();
     return favorites.includes(folderId);
   },
-}));
+}),
+{
+  name: 'finder-storage',
+  storage: createJSONStorage(() => localStorage),
+  partialize: (state) => ({
+    favorites: state.favorites,
+    viewMode: state.viewMode,
+    sortBy: state.sortBy,
+    sortDirection: state.sortDirection,
+    tags: state.tags,
+  }),
+}
+));
