@@ -1,0 +1,22 @@
+version: '3'
+
+services:
+  fm-drive:
+    container_name: fm-drive
+    build: .
+    restart: always
+    ports:
+      - "3000:3000"
+    environment:
+      # 앱이 컨테이너 내부에서 바라보는 경로 (고정)
+      - NAS_ROOT_DIR=/data
+    volumes:
+      # [호스트 경로] : [컨테이너 내부 경로]
+      # .env 파일에서 DATA_PATH를 설정하거나, 아래 경로를 직접 수정하세요.
+      # 예: /home/fm/data:/data
+      - ${DATA_PATH:-./drive-root}:/data
+    
+    # [중요] 호스트 권한 문제 해결
+    # 서버의 사용자(fm)의 UID:GID를 사용해야 파일 쓰기 권한 문제가 안 생깁니다.
+    # 보통 Ubuntu 첫 번째 유저는 1000:1000 입니다.
+    user: "1000:1000"
