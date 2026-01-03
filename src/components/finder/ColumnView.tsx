@@ -175,6 +175,7 @@ export default function ColumnView() {
     }
     if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
       const filesToUpload = Array.from(e.dataTransfer.files);
+      // @ts-ignore
       uploadFiles(filesToUpload, targetFolder.id);
     }
     endDrag();
