@@ -128,7 +128,7 @@ interface FinderState {
   moveFiles: (fileIds: string[], targetParentId: string) => void;
   // @ts-ignore - Allow any arguments for now to fix build
   uploadFiles: (files: File[], parentId?: any) => Promise<void>;
-  downloadFile: (fileId: string) => void;
+  downloadItems: (fileIds: string[]) => void;
   
   // Box Selection
   startBoxSelection: (x: number, y: number) => void;
@@ -441,8 +441,19 @@ export const useFinderStore = create<FinderState>()(persist((set, get) => ({
   setDragOver: (fileId) => set((state) => ({ 
     dragState: { ...state.dragState, dragOverFileId: fileId } 
   })),
-  moveFiles: (fileIds, targetParentId) => {
-    console.warn('Move not implemented fully on server yet');
+  moveFiles: async (fileIds, targetParentId) => {
+    try {
+      const res = await fetch('/api/drive/move', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ fileIds, targetParentId })
+      });
+      if (!res.ok) throw new Error('Move failed');
+      get().fetchFiles(get().currentPath);
+    } catch (e) {
+      console.error(e);
+      alert('Failed to move items');
+    }
   },
 
   uploadFiles: async (uploadedFiles, targetParentId) => {
@@ -504,8 +515,17 @@ export const useFinderStore = create<FinderState>()(persist((set, get) => ({
     get().fetchFiles(get().currentPath);
   },
 
-  downloadFile: (fileId) => {
-    const url = `/api/drive/download?id=${encodeURIComponent(fileId)}`;
+  downloadItems: (fileIds) => {
+    if (fileIds.length === 0) return;
+    let url = '';
+    if (fileIds.length === 1) {
+      url = `/api/drive/download?id=${encodeURIComponent(fileIds[0])}`;
+    } else {
+      const params = new URLSearchParams();
+      params.set('ids', fileIds.join(','));
+      url = `/api/drive/zip?${params.toString()}`;
+    }
+    
     const link = document.createElement('a');
     link.href = url;
     link.download = '';

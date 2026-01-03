@@ -1,21 +1,33 @@
 import { useMemo } from 'react';
 import { FileNode } from '@/types/file';
 import { useFinderStore } from '@/store/useFinderStore';
-import { toBase64 } from '@/lib/utils';
+import { toBase64, fromBase64 } from '@/lib/utils';
 
 export const useFileFilter = (allFiles: FileNode[]) => {
-  const { currentPath, searchQuery, sortBy, sortDirection } = useFinderStore();
+  const { currentPath, searchQuery, sortBy, sortDirection, tags } = useFinderStore();
 
   const filteredFiles = useMemo(() => {
     let result: FileNode[] = [];
 
     // 1. [검색 모드] vs [일반 탐색 모드]
     if (searchQuery.trim().length > 0) {
-      // Global Search: 전체 파일 대상
-      const lowerQuery = searchQuery.toLowerCase();
-      result = allFiles.filter(f => 
-        !f.isTrashed && f.name.toLowerCase().includes(lowerQuery)
-      );
+      // [Tag Filtering]
+      if (searchQuery.startsWith('tag:')) {
+        const targetColor = searchQuery.replace('tag:', '').trim();
+        // 전체 파일 중 해당 태그를 가진 파일 찾기
+        result = allFiles.filter(f => {
+          if (f.isTrashed) return false;
+          const path = f.id === 'root' ? '' : fromBase64(f.id);
+          const fileTags = tags[path] || [];
+          return fileTags.includes(targetColor);
+        });
+      } else {
+        // [Global Search]
+        const lowerQuery = searchQuery.toLowerCase();
+        result = allFiles.filter(f => 
+          !f.isTrashed && f.name.toLowerCase().includes(lowerQuery)
+        );
+      }
     } else {
       // Local Navigation: 현재 경로 대상
       const rootSegment = currentPath[0];
@@ -66,7 +78,7 @@ export const useFileFilter = (allFiles: FileNode[]) => {
       return sortDirection === 'asc' ? comparison : -comparison;
     });
 
-  }, [allFiles, currentPath, searchQuery, sortBy, sortDirection]);
+  }, [allFiles, currentPath, searchQuery, sortBy, sortDirection, tags]);
 
   return filteredFiles;
 };

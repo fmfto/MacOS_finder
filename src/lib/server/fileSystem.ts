@@ -128,19 +128,64 @@ export async function renameEntry(id: string, newName: string): Promise<void> {
   }
 }
 
-// 8. 삭제 (휴지통 기능 미구현으로 영구 삭제)
-export async function deleteEntry(id: string): Promise<void> {
-  const targetPath = getFullPathFromId(id);
+// 9. 이동
+
+export async function moveEntry(ids: string[], destinationId: string): Promise<void> {
+
+  const destPath = getFullPathFromId(destinationId);
+
   
-  // 루트 삭제 방지
-  if (targetPath === ROOT_DIR) {
-    throw new Error('Cannot delete root directory');
+
+  // 목적지 체크
+
+  if (!destPath.startsWith(ROOT_DIR)) {
+
+    throw new Error('Access denied: Invalid destination');
+
   }
 
-  try {
-    // recursive: true (폴더일 경우 내용물까지 삭제)
-    await fs.rm(targetPath, { recursive: true, force: true });
-  } catch (error) {
-    throw new Error('Failed to delete entry');
+
+
+  for (const id of ids) {
+
+    const sourcePath = getFullPathFromId(id);
+
+    const fileName = path.basename(sourcePath);
+
+    const newPath = path.join(destPath, fileName);
+
+
+
+    // 소스와 목적지가 같으면 스킵
+
+    if (sourcePath === newPath) continue;
+
+    
+
+    // 경로 보안 체크
+
+    if (!sourcePath.startsWith(ROOT_DIR) || !path.resolve(newPath).startsWith(ROOT_DIR)) {
+
+      throw new Error(`Access denied for file: ${fileName}`);
+
+    }
+
+
+
+    try {
+
+      await fs.rename(sourcePath, newPath);
+
+    } catch (error) {
+
+      console.error(`Failed to move ${fileName}`, error);
+
+      // 하나 실패해도 나머지는 계속 진행? 일단 에러 던짐
+
+      throw new Error(`Failed to move ${fileName}`);
+
+    }
+
   }
+
 }
