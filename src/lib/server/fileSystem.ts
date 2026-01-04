@@ -182,10 +182,14 @@ export async function moveEntry(ids: string[], destinationId: string): Promise<v
 
       // 하나 실패해도 나머지는 계속 진행? 일단 에러 던짐
 
-      throw new Error(`Failed to move ${fileName}`);
+            throw new Error(`Failed to move ${fileName}`);
 
-    }
+          }
 
-  }
+        }
 
-}
+      }
+
+      
+
+      // End of file system utilities
