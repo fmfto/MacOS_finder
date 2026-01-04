@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getFullPathFromId } from '@/lib/server/fileSystem';
+import { getFullPathFromId } from '@/lib/server/fsUtils';
 import fs from 'fs/promises';
 import path from 'path';
 import mime from 'mime';

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getFullPathFromId } from '@/lib/server/fileSystem';
+import { getFullPathFromId } from '@/lib/server/fsUtils';
 import archiver from 'archiver';
 import { PassThrough } from 'stream';
 import path from 'path';

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { moveEntry } from '@/lib/server/fileSystem';
+import { moveEntry } from '@/lib/server/fsUtils';
 import { moveFileTags } from '@/lib/server/tagSystem';
-import { getFullPathFromId } from '@/lib/server/fileSystem';
+import { getFullPathFromId } from '@/lib/server/fsUtils';
 import path from 'path';
 
 // 태그 이동 로직을 위해 id로부터 상대 경로를 추출하는 헬퍼 필요

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { listDirectory, createDirectory } from '@/lib/server/fileSystem';
+import { listDirectory, createDirectory } from '@/lib/server/fsUtils';
 
 export async function GET(request: NextRequest) {
   const searchParams = request.nextUrl.searchParams;

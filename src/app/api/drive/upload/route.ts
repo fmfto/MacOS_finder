@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getSafePath } from '@/lib/server/fileSystem';
+import { getSafePath } from '@/lib/server/fsUtils';
 import fs from 'fs/promises';
 import path from 'path';
 

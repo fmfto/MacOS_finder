@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { renameEntry, deleteEntry } from '@/lib/server/fileSystem';
+import { renameEntry, deleteEntry } from '@/lib/server/fsUtils';
 
 export async function PATCH(request: NextRequest) {
   try {
