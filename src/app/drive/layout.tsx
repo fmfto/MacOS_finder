@@ -8,6 +8,7 @@ import ActionModal from '@/components/layout/ActionModal';
 import PreviewModal from '@/components/layout/PreviewModal';
 import ShareModal from '@/components/layout/ShareModal';
 import InfoModal from '@/components/layout/InfoModal';
+import { UploadProgress } from '@/components/layout/UploadProgress';
 import { useFinderStore } from '@/store/useFinderStore';
 import { useKeyboardShortcuts } from '@/hooks/useKeyboardShortcuts';
 
@@ -49,6 +50,7 @@ export default function DriveLayout({
       <PreviewModal />
       <ShareModal />
       <InfoModal />
+      <UploadProgress />
     </div>
   );
 }

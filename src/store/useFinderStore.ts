@@ -49,6 +49,14 @@ interface BoxSelectionState {
   endY: number;
 }
 
+export interface UploadTask {
+  id: string;
+  name: string;
+  progress: number;
+  status: 'pending' | 'uploading' | 'completed' | 'error';
+  error?: string;
+}
+
 // [추가] 정렬 옵션 타입
 type SortOption = 'name' | 'date' | 'size' | 'kind';
 type SortDirection = 'asc' | 'desc';
@@ -74,6 +82,9 @@ interface FinderState {
   dragState: DragState;
   boxSelection: BoxSelectionState;
   
+  uploadTasks: UploadTask[];
+  isUploadPanelOpen: boolean;
+
   // [추가] 검색 및 정렬 State
   searchQuery: string;
   sortBy: SortOption;
@@ -128,6 +139,9 @@ interface FinderState {
   moveFiles: (fileIds: string[], targetParentId: string) => void;
   // @ts-ignore - Allow any arguments for now to fix build
   uploadFiles: (files: File[], parentId?: any) => Promise<void>;
+  toggleUploadPanel: () => void;
+  removeUploadTask: (taskId: string) => void;
+  clearCompletedTasks: () => void;
   downloadItems: (fileIds: string[]) => void;
   
   // Box Selection
@@ -176,6 +190,9 @@ export const useFinderStore = create<FinderState>()(persist((set, get) => ({
   clipboard: { type: null, fileIds: [] },
   dragState: { isDragging: false, draggedFileIds: [], dragType: null, dragOverFileId: null },
   boxSelection: { isActive: false, startX: 0, startY: 0, endX: 0, endY: 0 },
+  
+  uploadTasks: [],
+  isUploadPanelOpen: false,
   
   searchQuery: '',
   sortBy: 'name',
@@ -482,38 +499,102 @@ export const useFinderStore = create<FinderState>()(persist((set, get) => ({
 
     console.log('Base upload path:', pathString);
 
-    for (const file of uploadedFiles) {
-      const formData = new FormData();
-      formData.append('file', file);
-      
-      let finalPath = pathString;
-      
-      // @ts-ignore
-      const relativePath = file.webkitRelativePath;
-      if (relativePath) {
-        const parts = relativePath.split('/');
-        if (parts.length > 1) {
-           const dirPart = parts.slice(0, -1).join('/');
-           finalPath = pathString ? `${pathString}/${dirPart}` : dirPart;
-        }
-      }
-      
-      console.log('Uploading file:', file.name, 'to', finalPath);
-      formData.append('path', finalPath);
+    // Create tasks
+    const newTasks: UploadTask[] = uploadedFiles.map(file => ({
+      id: Math.random().toString(36).substr(2, 9),
+      name: file.name,
+      progress: 0,
+      status: 'pending',
+    }));
 
-      try {
-        const res = await fetch('/api/drive/upload', {
-          method: 'POST',
-          body: formData,
-        });
-        if (!res.ok) throw new Error(await res.text());
-      } catch (e) {
-        console.error(`Failed to upload ${file.name}`, e);
-      }
-    }
-    
+    set(state => ({ 
+      uploadTasks: [...state.uploadTasks, ...newTasks],
+      isUploadPanelOpen: true 
+    }));
+
+    // Function to process a single file upload
+    const processUpload = (task: UploadTask, file: File) => {
+      return new Promise<void>((resolve, reject) => {
+        const formData = new FormData();
+        formData.append('file', file);
+        
+        let finalPath = pathString;
+        // @ts-ignore
+        const relativePath = file.webkitRelativePath;
+        if (relativePath) {
+          const parts = relativePath.split('/');
+          if (parts.length > 1) {
+             const dirPart = parts.slice(0, -1).join('/');
+             finalPath = pathString ? `${pathString}/${dirPart}` : dirPart;
+          }
+        }
+        formData.append('path', finalPath);
+
+        const xhr = new XMLHttpRequest();
+        xhr.open('POST', '/api/drive/upload', true);
+
+        xhr.upload.onprogress = (e) => {
+          if (e.lengthComputable) {
+            const percent = Math.round((e.loaded / e.total) * 100);
+            set(state => ({
+              uploadTasks: state.uploadTasks.map(t => 
+                t.id === task.id ? { ...t, progress: percent, status: 'uploading' } : t
+              )
+            }));
+          }
+        };
+
+        xhr.onload = () => {
+          if (xhr.status >= 200 && xhr.status < 300) {
+            set(state => ({
+              uploadTasks: state.uploadTasks.map(t => 
+                t.id === task.id ? { ...t, progress: 100, status: 'completed' } : t
+              )
+            }));
+            resolve();
+          } else {
+            set(state => ({
+              uploadTasks: state.uploadTasks.map(t => 
+                t.id === task.id ? { ...t, status: 'error', error: xhr.statusText || 'Upload failed' } : t
+              )
+            }));
+            reject(new Error(xhr.statusText));
+          }
+        };
+
+        xhr.onerror = () => {
+          set(state => ({
+            uploadTasks: state.uploadTasks.map(t => 
+              t.id === task.id ? { ...t, status: 'error', error: 'Network Error' } : t
+            )
+          }));
+          reject(new Error('Network Error'));
+        };
+
+        xhr.send(formData);
+      });
+    };
+
+    // Execute uploads
+    // We run them concurrently for better performance
+    const promises = newTasks.map((task, index) => 
+      processUpload(task, uploadedFiles[index]).catch(e => console.error(e))
+    );
+
+    await Promise.all(promises);
     get().fetchFiles(get().currentPath);
   },
+
+  toggleUploadPanel: () => set(state => ({ isUploadPanelOpen: !state.isUploadPanelOpen })),
+  
+  removeUploadTask: (taskId) => set(state => ({
+    uploadTasks: state.uploadTasks.filter(t => t.id !== taskId)
+  })),
+
+  clearCompletedTasks: () => set(state => ({
+    uploadTasks: state.uploadTasks.filter(t => t.status !== 'completed')
+  })),
+
 
   downloadItems: (fileIds) => {
     if (fileIds.length === 0) return;

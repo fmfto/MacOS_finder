@@ -1,7 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSafePath } from '@/lib/server/fsUtils';
 import fs from 'fs/promises';
+import { createWriteStream } from 'fs';
 import path from 'path';
+import { pipeline } from 'stream/promises';
+import { Readable } from 'stream';
 
 export async function POST(request: NextRequest) {
   try {
@@ -19,13 +22,20 @@ export async function POST(request: NextRequest) {
     // 폴더가 없으면 생성 (recursive)
     await fs.mkdir(targetDir, { recursive: true });
 
-    const arrayBuffer = await file.arrayBuffer();
-    const buffer = Buffer.from(arrayBuffer);
-    
-    // 파일명 충돌 방지 로직은 생략 (덮어쓰기)
     const filePath = path.join(targetDir, file.name);
     
-    await fs.writeFile(filePath, buffer);
+    // Stream implementation to avoid high memory usage
+    if (file.stream) {
+      // @ts-ignore - Readable.fromWeb matches WebStream types in Node 20+
+      const nodeStream = Readable.fromWeb(file.stream());
+      const writeStream = createWriteStream(filePath);
+      await pipeline(nodeStream, writeStream);
+    } else {
+      // Fallback
+      const arrayBuffer = await file.arrayBuffer();
+      const buffer = Buffer.from(arrayBuffer);
+      await fs.writeFile(filePath, buffer);
+    }
 
     return NextResponse.json({ success: true });
   } catch (error) {
