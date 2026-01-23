@@ -667,9 +667,21 @@ export const useFinderStore = create<FinderState>()(persist((set, get) => ({
 
 
   downloadItems: (fileIds) => {
+    const { files } = get();
     if (fileIds.length === 0) return;
+
+    let useZip = false;
+    if (fileIds.length > 1) {
+      useZip = true;
+    } else {
+      const file = files.find(f => f.id === fileIds[0]);
+      if (file && file.type === 'folder') {
+        useZip = true;
+      }
+    }
+
     let url = '';
-    if (fileIds.length === 1) {
+    if (!useZip) {
       url = `/api/drive/download?id=${encodeURIComponent(fileIds[0])}`;
     } else {
       const params = new URLSearchParams();
