@@ -15,7 +15,7 @@ export default function Toolbar() {
     searchQuery, setSearchQuery,
     sortBy, setSortBy, sortDirection, toggleSortDirection,
     selectedFiles, files, openModal,
-    history, uploadFiles, downloadFile, toggleSidebar
+    history, uploadFiles, downloadItems, toggleSidebar
   } = useFinderStore();
 
   const router = useRouter();
@@ -57,14 +57,8 @@ export default function Toolbar() {
 
   const handleDownload = () => {
     if (selectedFiles.size === 0) return;
-    const fileId = Array.from(selectedFiles)[0];
-    const file = files.find(f => f.id === fileId);
-    
-    if (file && file.type === 'file') {
-      downloadFile(fileId);
-    } else {
-      alert('Downloading folders is not supported yet.');
-    }
+    // 다중 선택 다운로드 지원
+    downloadItems(Array.from(selectedFiles));
   };
 
   const handleBack = () => {
@@ -170,9 +164,14 @@ export default function Toolbar() {
       if (file) {
         title = file.name;
         text = `Check out ${file.name} on FM Drive`;
+        url = `${window.location.origin}/api/drive/download?id=${encodeURIComponent(fileId)}`;
       }
     } else if (selectedFiles.size > 1) {
       title = `${selectedFiles.size} items`;
+      // 여러 파일 공유 시 ZIP 링크 생성
+      const params = new URLSearchParams();
+      params.set('ids', Array.from(selectedFiles).join(','));
+      url = `${window.location.origin}/api/drive/zip?${params.toString()}`;
     }
 
     // 2. Web Share API 지원 여부 확인

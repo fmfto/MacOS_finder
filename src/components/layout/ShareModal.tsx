@@ -44,10 +44,20 @@ export default function ShareModal() {
 
   const info = getShareInfo();
 
-  // 가짜 링크 복사 동작
+  // 링크 복사 동작
   const handleCopyLink = () => {
-    const fakeUrl = `https://fm.pe.kr/share/${Math.random().toString(36).substr(2, 9)}`;
-    navigator.clipboard.writeText(fakeUrl);
+    let url = window.location.href;
+    
+    if (selectedFiles.size === 1) {
+      const fileId = Array.from(selectedFiles)[0];
+      url = `${window.location.origin}/api/drive/download?id=${encodeURIComponent(fileId)}`;
+    } else if (selectedFiles.size > 1) {
+      const params = new URLSearchParams();
+      params.set('ids', Array.from(selectedFiles).join(','));
+      url = `${window.location.origin}/api/drive/zip?${params.toString()}`;
+    }
+
+    navigator.clipboard.writeText(url);
     setCopied(true);
     setTimeout(() => {
       setCopied(false);

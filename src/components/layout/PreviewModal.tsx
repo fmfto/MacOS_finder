@@ -6,11 +6,12 @@ import { formatSize, formatDate } from '@/lib/format';
 import { useEffect, useState, useCallback } from 'react';
 
 export default function PreviewModal() {
-  const { previewModal, closePreview, files, openPreview, visibleFiles } = useFinderStore();
+  const { previewModal, closePreview, files, openPreview, visibleFiles, downloadItems } = useFinderStore();
   const [imageLoading, setImageLoading] = useState(true);
   const [imageError, setImageError] = useState(false);
 
   const file = files.find(f => f.id === previewModal.fileId);
+  const fileUrl = file ? `/api/drive/download?id=${encodeURIComponent(file.id)}` : '';
 
   // 미리보기 가능한 파일 목록 (현재 뷰에서)
   const previewableFiles = visibleFiles.filter(f =>
@@ -58,20 +59,12 @@ export default function PreviewModal() {
   if (!file) return null;
 
   const handleDownload = () => {
-    if (file.url) {
-      const link = document.createElement('a');
-      link.href = file.url;
-      link.download = file.name;
-      link.target = '_blank';
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-    }
+    downloadItems([file.id]);
   };
 
   const handleOpenNewTab = () => {
-    if (file.url) {
-      window.open(file.url, '_blank');
+    if (fileUrl) {
+      window.open(fileUrl, '_blank');
     }
   };
 
@@ -81,7 +74,7 @@ export default function PreviewModal() {
 
     // 1. 이미지
     if (mime.startsWith('image/')) {
-      if (file.url) {
+      if (fileUrl) {
         return (
           <div className="relative w-full h-full flex items-center justify-center">
             {imageLoading && (
@@ -96,7 +89,7 @@ export default function PreviewModal() {
               </div>
             ) : (
               <img
-                src={file.url}
+                src={fileUrl}
                 alt={file.name}
                 className={`max-w-full max-h-full object-contain rounded-md transition-opacity duration-300 ${imageLoading ? 'opacity-0' : 'opacity-100'}`}
                 onLoad={() => setImageLoading(false)}
@@ -119,11 +112,11 @@ export default function PreviewModal() {
 
     // 2. 비디오
     if (mime.startsWith('video/')) {
-      if (file.url) {
+      if (fileUrl) {
         return (
           <div className="w-full h-full flex items-center justify-center bg-black rounded-md overflow-hidden">
             <video
-              src={file.url}
+              src={fileUrl}
               controls
               autoPlay
               className="max-w-full max-h-full"
@@ -144,10 +137,10 @@ export default function PreviewModal() {
 
     // 3. PDF
     if (mime === 'application/pdf') {
-      if (file.url) {
+      if (fileUrl) {
         return (
           <iframe
-            src={file.url}
+            src={fileUrl}
             className="w-full h-full rounded-md border-0"
             title={file.name}
           />
@@ -232,7 +225,6 @@ export default function PreviewModal() {
           <div className="flex items-center gap-1 flex-shrink-0">
             <button
               onClick={handleDownload}
-              disabled={!file.url}
               className="p-2 hover:bg-black/5 rounded-full transition-colors text-gray-600 disabled:opacity-30 disabled:cursor-not-allowed"
               title="Download"
             >
@@ -240,7 +232,7 @@ export default function PreviewModal() {
             </button>
             <button
               onClick={handleOpenNewTab}
-              disabled={!file.url}
+              disabled={!fileUrl}
               className="p-2 hover:bg-black/5 rounded-full transition-colors text-gray-600 disabled:opacity-30 disabled:cursor-not-allowed"
               title="Open in new tab"
             >
