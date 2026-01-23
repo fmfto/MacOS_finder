@@ -9,6 +9,7 @@ import PreviewModal from '@/components/layout/PreviewModal';
 import ShareModal from '@/components/layout/ShareModal';
 import InfoModal from '@/components/layout/InfoModal';
 import { UploadProgress } from '@/components/layout/UploadProgress';
+import { Toaster } from '@/components/layout/Toaster';
 import { useFinderStore } from '@/store/useFinderStore';
 import { useKeyboardShortcuts } from '@/hooks/useKeyboardShortcuts';
 
@@ -51,6 +52,7 @@ export default function DriveLayout({
       <ShareModal />
       <InfoModal />
       <UploadProgress />
+      <Toaster />
     </div>
   );
 }

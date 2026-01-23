@@ -57,6 +57,12 @@ export interface UploadTask {
   error?: string;
 }
 
+export interface Toast {
+  id: string;
+  message: string;
+  type: 'success' | 'error' | 'info';
+}
+
 // [추가] 정렬 옵션 타입
 type SortOption = 'name' | 'date' | 'size' | 'kind';
 type SortDirection = 'asc' | 'desc';
@@ -85,6 +91,7 @@ interface FinderState {
   uploadTasks: UploadTask[];
   isUploadPanelOpen: boolean;
   isSidebarOpen: boolean; // 모바일 사이드바 상태
+  toasts: Toast[];
 
   // [추가] 검색 및 정렬 State
   searchQuery: string;
@@ -146,6 +153,8 @@ interface FinderState {
   removeUploadTask: (taskId: string) => void;
   clearCompletedTasks: () => void;
   downloadItems: (fileIds: string[]) => void;
+  addToast: (message: string, type?: 'success' | 'error' | 'info') => void;
+  removeToast: (id: string) => void;
   
   // Box Selection
   startBoxSelection: (x: number, y: number) => void;
@@ -197,6 +206,7 @@ export const useFinderStore = create<FinderState>()(persist((set, get) => ({
   uploadTasks: [],
   isUploadPanelOpen: false,
   isSidebarOpen: false,
+  toasts: [],
   
   searchQuery: '',
   sortBy: 'name',
@@ -313,6 +323,7 @@ export const useFinderStore = create<FinderState>()(persist((set, get) => ({
         selectedFiles: new Set(),
         focusedFileId: null,
         isNavigatingHistory: false,
+        searchQuery: '',
       });
       return;
     }
@@ -322,6 +333,7 @@ export const useFinderStore = create<FinderState>()(persist((set, get) => ({
         currentPath: path,
         selectedFiles: new Set(),
         focusedFileId: null,
+        searchQuery: '',
       });
       return;
     }
@@ -335,6 +347,7 @@ export const useFinderStore = create<FinderState>()(persist((set, get) => ({
       },
       selectedFiles: new Set(),
       focusedFileId: null,
+      searchQuery: '',
     });
   },
   navigateUp: () => {
@@ -388,9 +401,10 @@ export const useFinderStore = create<FinderState>()(persist((set, get) => ({
       
       get().fetchFiles(get().currentPath);
       set((state) => ({ selectedFiles: new Set() }));
+      get().addToast('Deleted successfully', 'success');
     } catch (e) {
       console.error(e);
-      alert('Failed to delete item');
+      get().addToast('Failed to delete item', 'error');
     }
   },
 
@@ -427,9 +441,10 @@ export const useFinderStore = create<FinderState>()(persist((set, get) => ({
 
       set({ favorites: newFavorites });
       get().fetchFiles(get().currentPath);
+      get().addToast('Renamed successfully', 'success');
     } catch (e) {
       console.error(e);
-      alert('Failed to rename item');
+      get().addToast('Failed to rename item', 'error');
     }
   },
 
@@ -446,9 +461,10 @@ export const useFinderStore = create<FinderState>()(persist((set, get) => ({
       if (!res.ok) throw new Error('Create folder failed');
       
       get().fetchFiles(currentPath);
+      get().addToast('Folder created', 'success');
     } catch (e) {
       console.error(e);
-      alert('Failed to create folder');
+      get().addToast('Failed to create folder', 'error');
     }
   },
 
@@ -471,9 +487,10 @@ export const useFinderStore = create<FinderState>()(persist((set, get) => ({
       });
       if (!res.ok) throw new Error('Move failed');
       get().fetchFiles(get().currentPath);
+      get().addToast('Moved successfully', 'success');
     } catch (e) {
       console.error(e);
-      alert('Failed to move items');
+      get().addToast('Failed to move items', 'error');
     }
   },
 
@@ -665,6 +682,15 @@ export const useFinderStore = create<FinderState>()(persist((set, get) => ({
     uploadTasks: state.uploadTasks.filter(t => t.status !== 'completed')
   })),
 
+  addToast: (message, type = 'info') => {
+    const id = Math.random().toString(36).substr(2, 9);
+    set(state => ({ toasts: [...state.toasts, { id, message, type }] }));
+    setTimeout(() => get().removeToast(id), 3000);
+  },
+
+  removeToast: (id) => set(state => ({
+    toasts: state.toasts.filter(t => t.id !== id)
+  })),
 
   downloadItems: (fileIds) => {
     const { files } = get();
