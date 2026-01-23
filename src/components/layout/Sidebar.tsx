@@ -6,6 +6,7 @@ import {
 import { usePathname, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useFinderStore } from '@/store/useFinderStore';
+import { cn } from '@/lib/utils';
 
 // NAS 환경에 맞게 메뉴를 실용적으로 정리했습니다.
 const SIDEBAR_ITEMS = [
@@ -29,7 +30,12 @@ const TAG_COLORS = ['Red', 'Orange', 'Yellow', 'Green', 'Blue', 'Purple', 'Gray'
 export default function Sidebar() {
   const pathname = usePathname();
   const router = useRouter();
-  const { favorites, files, removeFromFavorites, setSearchQuery } = useFinderStore();
+  const { 
+    favorites, files, removeFromFavorites, setSearchQuery,
+    isSidebarOpen, setSidebarOpen 
+  } = useFinderStore();
+
+  const handleNav = () => setSidebarOpen(false);
 
   // 즐겨찾기된 폴더들
   const favoriteFolders = favorites
@@ -59,7 +65,23 @@ export default function Sidebar() {
   };
 
   return (
-    <aside className="w-56 h-full bg-finder-sidebar backdrop-blur-xl border-r border-finder-border flex-shrink-0 pt-4 pb-4 overflow-y-auto">
+    <>
+      {/* Mobile Overlay */}
+      {isSidebarOpen && (
+        <div 
+          className="fixed inset-0 bg-black/50 z-40 md:hidden"
+          onClick={() => setSidebarOpen(false)}
+        />
+      )}
+
+      <aside className={cn(
+        "bg-finder-sidebar backdrop-blur-xl border-r border-finder-border flex-shrink-0 pt-4 pb-4 overflow-y-auto transition-transform duration-300 ease-in-out z-50",
+        // Desktop
+        "md:relative md:translate-x-0 md:w-56 md:h-full",
+        // Mobile
+        "fixed top-0 left-0 h-full w-64 shadow-2xl",
+        isSidebarOpen ? "translate-x-0" : "-translate-x-full"
+      )}>
       <div className="px-2 space-y-6">
         {SIDEBAR_ITEMS.map((section, sectionIndex) => (
           <div key={section.category}>
@@ -72,6 +94,7 @@ export default function Sidebar() {
                 return (
                   <li key={item.name}>
                     <Link
+                      onClick={handleNav}
                       href={item.path}
                       className={`
                         flex items-center gap-2 px-3 py-1.5 rounded-md text-sm transition-colors
@@ -103,6 +126,7 @@ export default function Sidebar() {
                       <li key={folder.id} className="group">
                         <div className="flex items-center">
                           <Link
+                            onClick={handleNav}
                             href={folderPath}
                             className={`
                               flex-1 flex items-center gap-2 px-3 py-1.5 rounded-md text-sm transition-colors
@@ -164,5 +188,6 @@ export default function Sidebar() {
         </div>
       </div>
     </aside>
+    </>
   );
 }

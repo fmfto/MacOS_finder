@@ -190,9 +190,9 @@ export default function ListView({ files }: ListViewProps) {
         <thead className="sticky top-0 bg-finder-bg z-10 text-finder-text-secondary font-medium text-xs border-b border-finder-border">
           <tr>
             <th className="pl-4 py-1.5 w-[40%] font-normal">Name</th>
-            <th className="py-1.5 w-[25%] font-normal">Date Modified</th>
-            <th className="py-1.5 w-[15%] font-normal">Size</th>
-            <th className="py-1.5 w-[20%] font-normal">Kind</th>
+            <th className="hidden md:table-cell py-1.5 w-[25%] font-normal">Date Modified</th>
+            <th className="hidden md:table-cell py-1.5 w-[15%] font-normal">Size</th>
+            <th className="hidden md:table-cell py-1.5 w-[20%] font-normal">Kind</th>
           </tr>
         </thead>
         <tbody>
@@ -275,9 +275,9 @@ export default function ListView({ files }: ListViewProps) {
                     );
                   })()}
                 </td>
-                <td className={`py-1 whitespace-nowrap ${isSelected ? 'text-white' : 'text-finder-text-secondary'}`}>{formatDate(file.updatedAt)}</td>
-                <td className={`py-1 whitespace-nowrap ${isSelected ? 'text-white' : 'text-finder-text-secondary'}`}>{formatSize(file.size)}</td>
-                <td className={`py-1 whitespace-nowrap ${isSelected ? 'text-white' : 'text-finder-text-secondary'}`}>{file.type === 'folder' ? 'Folder' : (file.mimeType?.split('/')[1].toUpperCase() || 'File')}</td>
+                <td className={`hidden md:table-cell py-1 whitespace-nowrap ${isSelected ? 'text-white' : 'text-finder-text-secondary'}`}>{formatDate(file.updatedAt)}</td>
+                <td className={`hidden md:table-cell py-1 whitespace-nowrap ${isSelected ? 'text-white' : 'text-finder-text-secondary'}`}>{formatSize(file.size)}</td>
+                <td className={`hidden md:table-cell py-1 whitespace-nowrap ${isSelected ? 'text-white' : 'text-finder-text-secondary'}`}>{file.type === 'folder' ? 'Folder' : (file.mimeType?.split('/')[1].toUpperCase() || 'File')}</td>
               </tr>
             );
           })}

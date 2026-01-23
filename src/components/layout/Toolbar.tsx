@@ -3,7 +3,7 @@
 import { 
   ChevronLeft, ChevronRight, LayoutGrid, List, Columns, 
   Search, Share, ArrowDownAZ, ArrowUpZA, X,
-  Home, ArrowUp, FileUp, FolderUp, Plus, Download
+  Home, ArrowUp, FileUp, FolderUp, Plus, Download, Menu
 } from 'lucide-react';
 import { useFinderStore } from '@/store/useFinderStore';
 import { useRouter } from 'next/navigation';
@@ -15,7 +15,7 @@ export default function Toolbar() {
     searchQuery, setSearchQuery,
     sortBy, setSortBy, sortDirection, toggleSortDirection,
     selectedFiles, files, openModal,
-    history, uploadFiles, downloadFile
+    history, uploadFiles, downloadFile, toggleSidebar
   } = useFinderStore();
 
   const router = useRouter();
@@ -190,8 +190,16 @@ export default function Toolbar() {
   };
 
   return (
-    <header className="h-14 bg-finder-bg border-b border-finder-border flex items-center justify-between px-4 gap-4 flex-shrink-0">
-      
+    <header className="h-14 bg-finder-bg border-b border-finder-border flex-shrink-0 overflow-x-auto no-scrollbar">
+      <div className="flex items-center justify-between px-4 gap-4 h-full min-w-max">
+        {/* Mobile Sidebar Toggle */}
+        <button
+          onClick={toggleSidebar}
+          className="p-1.5 rounded-md hover:bg-finder-hover md:hidden text-finder-text-primary"
+        >
+          <Menu size={20} />
+        </button>
+
       {/* 1. Navigation Group */}
       <div className="flex items-center gap-2">
         {/* 뒤로가기/앞으로가기 */}
@@ -415,6 +423,7 @@ export default function Toolbar() {
         multiple 
         className="hidden" 
       />
+      </div>
     </header>
   );
 }

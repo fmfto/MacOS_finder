@@ -84,6 +84,7 @@ interface FinderState {
   
   uploadTasks: UploadTask[];
   isUploadPanelOpen: boolean;
+  isSidebarOpen: boolean; // 모바일 사이드바 상태
 
   // [추가] 검색 및 정렬 State
   searchQuery: string;
@@ -140,6 +141,8 @@ interface FinderState {
   // @ts-ignore - Allow any arguments for now to fix build
   uploadFiles: (files: File[], parentId?: any) => Promise<void>;
   toggleUploadPanel: () => void;
+  toggleSidebar: () => void;
+  setSidebarOpen: (isOpen: boolean) => void;
   removeUploadTask: (taskId: string) => void;
   clearCompletedTasks: () => void;
   downloadItems: (fileIds: string[]) => void;
@@ -193,6 +196,7 @@ export const useFinderStore = create<FinderState>()(persist((set, get) => ({
   
   uploadTasks: [],
   isUploadPanelOpen: false,
+  isSidebarOpen: false,
   
   searchQuery: '',
   sortBy: 'name',
@@ -650,6 +654,9 @@ export const useFinderStore = create<FinderState>()(persist((set, get) => ({
 
   toggleUploadPanel: () => set(state => ({ isUploadPanelOpen: !state.isUploadPanelOpen })),
   
+  toggleSidebar: () => set(state => ({ isSidebarOpen: !state.isSidebarOpen })),
+  setSidebarOpen: (isOpen) => set({ isSidebarOpen: isOpen }),
+
   removeUploadTask: (taskId) => set(state => ({
     uploadTasks: state.uploadTasks.filter(t => t.id !== taskId)
   })),
