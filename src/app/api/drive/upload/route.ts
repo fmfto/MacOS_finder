@@ -12,7 +12,7 @@ export async function POST(request: NextRequest) {
     const file = formData.get('file') as File | null;
     const pathParam = formData.get('path') as string | null;
 
-    if (!file || !pathParam) {
+    if (!file || pathParam === null) {
       return NextResponse.json({ error: 'Missing file or path' }, { status: 400 });
     }
 
