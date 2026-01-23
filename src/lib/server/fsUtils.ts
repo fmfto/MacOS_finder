@@ -173,23 +173,30 @@ export async function moveEntry(ids: string[], destinationId: string): Promise<v
 
 
     try {
-
       await fs.rename(sourcePath, newPath);
-
     } catch (error) {
-
       console.error(`Failed to move ${fileName}`, error);
-
       // 하나 실패해도 나머지는 계속 진행? 일단 에러 던짐
+      throw new Error(`Failed to move ${fileName}`);
+    }
+  }
+}
 
-            throw new Error(`Failed to move ${fileName}`);
+// 10. 삭제
+export async function deleteEntry(id: string): Promise<void> {
+  const fullPath = getFullPathFromId(id);
 
-          }
+  try {
+    const stats = await fs.stat(fullPath);
+    if (stats.isDirectory()) {
+      await fs.rm(fullPath, { recursive: true, force: true });
+    } else {
+      await fs.unlink(fullPath);
+    }
+  } catch (error) {
+    console.error(`Failed to delete entry: ${fullPath}`, error);
+    throw new Error('Failed to delete entry');
+  }
+}
 
-        }
-
-      }
-
-      
-
-      // End of file system utilities
+// End of file system utilities
