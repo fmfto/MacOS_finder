@@ -513,66 +513,129 @@ export const useFinderStore = create<FinderState>()(persist((set, get) => ({
     }));
 
     // Function to process a single file upload
-    const processUpload = (task: UploadTask, file: File) => {
-      return new Promise<void>((resolve, reject) => {
-        const formData = new FormData();
-        formData.append('file', file);
-        
-        let finalPath = pathString;
-        // @ts-ignore
-        const relativePath = file.webkitRelativePath;
-        if (relativePath) {
-          const parts = relativePath.split('/');
-          if (parts.length > 1) {
-             const dirPart = parts.slice(0, -1).join('/');
-             finalPath = pathString ? `${pathString}/${dirPart}` : dirPart;
-          }
+    const processUpload = async (task: UploadTask, file: File) => {
+      const CHUNK_SIZE = 50 * 1024 * 1024; // 50MB per chunk to stay well under 100MB Cloudflare limit
+      
+      let finalPath = pathString;
+      // @ts-ignore
+      const relativePath = file.webkitRelativePath;
+      if (relativePath) {
+        const parts = relativePath.split('/');
+        if (parts.length > 1) {
+           const dirPart = parts.slice(0, -1).join('/');
+           finalPath = pathString ? `${pathString}/${dirPart}` : dirPart;
         }
-        formData.append('path', finalPath);
+      }
 
-        const xhr = new XMLHttpRequest();
-        xhr.open('POST', '/api/drive/upload', true);
+      // Small file (< 50MB) -> Direct Upload
+      if (file.size <= CHUNK_SIZE) {
+        return new Promise<void>((resolve, reject) => {
+          const formData = new FormData();
+          formData.append('file', file);
+          formData.append('path', finalPath);
 
-        xhr.upload.onprogress = (e) => {
-          if (e.lengthComputable) {
-            const percent = Math.round((e.loaded / e.total) * 100);
+          const xhr = new XMLHttpRequest();
+          xhr.open('POST', '/api/drive/upload', true);
+
+          xhr.upload.onprogress = (e) => {
+            if (e.lengthComputable) {
+              const percent = Math.round((e.loaded / e.total) * 100);
+              set(state => ({
+                uploadTasks: state.uploadTasks.map(t => 
+                  t.id === task.id ? { ...t, progress: percent, status: 'uploading' } : t
+                )
+              }));
+            }
+          };
+
+          xhr.onload = () => {
+            if (xhr.status >= 200 && xhr.status < 300) {
+              set(state => ({
+                uploadTasks: state.uploadTasks.map(t => 
+                  t.id === task.id ? { ...t, progress: 100, status: 'completed' } : t
+                )
+              }));
+              resolve();
+            } else {
+              set(state => ({
+                uploadTasks: state.uploadTasks.map(t => 
+                  t.id === task.id ? { ...t, status: 'error', error: xhr.statusText || 'Upload failed' } : t
+                )
+              }));
+              reject(new Error(xhr.statusText));
+            }
+          };
+
+          xhr.onerror = () => {
             set(state => ({
               uploadTasks: state.uploadTasks.map(t => 
-                t.id === task.id ? { ...t, progress: percent, status: 'uploading' } : t
+                t.id === task.id ? { ...t, status: 'error', error: 'Network Error' } : t
               )
             }));
-          }
-        };
+            reject(new Error('Network Error'));
+          };
 
-        xhr.onload = () => {
-          if (xhr.status >= 200 && xhr.status < 300) {
-            set(state => ({
-              uploadTasks: state.uploadTasks.map(t => 
-                t.id === task.id ? { ...t, progress: 100, status: 'completed' } : t
-              )
-            }));
-            resolve();
-          } else {
-            set(state => ({
-              uploadTasks: state.uploadTasks.map(t => 
-                t.id === task.id ? { ...t, status: 'error', error: xhr.statusText || 'Upload failed' } : t
-              )
-            }));
-            reject(new Error(xhr.statusText));
-          }
-        };
+          xhr.send(formData);
+        });
+      }
 
-        xhr.onerror = () => {
-          set(state => ({
-            uploadTasks: state.uploadTasks.map(t => 
-              t.id === task.id ? { ...t, status: 'error', error: 'Network Error' } : t
-            )
-          }));
-          reject(new Error('Network Error'));
-        };
-
-        xhr.send(formData);
-      });
+      // Large file -> Chunked Upload
+      const totalChunks = Math.ceil(file.size / CHUNK_SIZE);
+      
+      try {
+        for (let i = 0; i < totalChunks; i++) {
+          const start = i * CHUNK_SIZE;
+          const end = Math.min(start + CHUNK_SIZE, file.size);
+          const chunk = file.slice(start, end);
+          
+          const formData = new FormData();
+          formData.append('file', chunk, file.name); // Important: backend uses filename from this
+          formData.append('path', finalPath);
+          
+          await new Promise<void>((resolve, reject) => {
+              const xhr = new XMLHttpRequest();
+              xhr.open('POST', '/api/drive/upload', true);
+              xhr.setRequestHeader('x-chunk-index', i.toString());
+              xhr.setRequestHeader('x-total-chunks', totalChunks.toString());
+              
+              xhr.upload.onprogress = (e) => {
+                if (e.lengthComputable) {
+                  // Calculate Global Progress
+                  // e.loaded is progress of CURRENT chunk
+                  const totalLoaded = (i * CHUNK_SIZE) + e.loaded;
+                  const percent = Math.min(100, Math.round((totalLoaded / file.size) * 100));
+                  
+                  set(state => ({
+                      uploadTasks: state.uploadTasks.map(t => 
+                        t.id === task.id ? { ...t, progress: percent, status: 'uploading' } : t
+                      )
+                  }));
+                }
+              };
+              
+              xhr.onload = () => {
+                if (xhr.status >= 200 && xhr.status < 300) resolve();
+                else reject(new Error(xhr.statusText));
+              };
+              xhr.onerror = () => reject(new Error('Network Error'));
+              xhr.send(formData);
+          });
+        }
+        
+        // All chunks finished
+        set(state => ({
+          uploadTasks: state.uploadTasks.map(t => 
+            t.id === task.id ? { ...t, progress: 100, status: 'completed' } : t
+          )
+        }));
+      } catch (e) {
+        console.error(e);
+        set(state => ({
+          uploadTasks: state.uploadTasks.map(t => 
+            t.id === task.id ? { ...t, status: 'error', error: 'Upload Failed' } : t
+          )
+        }));
+      }
     };
 
     // Execute uploads
