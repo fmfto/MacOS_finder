@@ -12,6 +12,11 @@ export const ROOT_DIR = process.env.NAS_ROOT_DIR
 // 2. 경로 보안 검사 (Directory Traversal 방지)
 // 요청된 경로가 ROOT_DIR 내부인지 확인
 export function getSafePath(requestPath: string[]): string {
+  // Handle empty array (root directory)
+  if (requestPath.length === 0) {
+    return ROOT_DIR;
+  }
+
   // URL 디코딩 및 경로 조합
   const joinedPath = path.join(...requestPath.map(p => decodeURIComponent(p)));
   // 절대 경로로 변환

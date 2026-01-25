@@ -1,13 +1,14 @@
 'use client';
 
-import { 
-  ChevronLeft, ChevronRight, LayoutGrid, List, Columns, 
+import {
+  ChevronLeft, ChevronRight, LayoutGrid, List, Columns,
   Search, Share, ArrowDownAZ, ArrowUpZA, X,
   Home, ArrowUp, FileUp, FolderUp, Plus, Download, Menu
 } from 'lucide-react';
 import { useFinderStore } from '@/store/useFinderStore';
 import { useRouter } from 'next/navigation';
 import { useRef, useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 
 export default function Toolbar() {
   const {
@@ -23,6 +24,8 @@ export default function Toolbar() {
   const folderInputRef = useRef<HTMLInputElement>(null);
   const [isUploadMenuOpen, setIsUploadMenuOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
+  const uploadButtonRef = useRef<HTMLButtonElement>(null);
+  const [menuPosition, setMenuPosition] = useState({ top: 0, left: 0 });
 
   // 메뉴 외부 클릭 감지
   useEffect(() => {
@@ -331,30 +334,41 @@ export default function Toolbar() {
         {/* Upload & Download Group */}
         <div className="flex items-center gap-1 mr-2 border-r border-gray-300 pr-2">
            {/* Upload Menu */}
-           <div className="relative" ref={menuRef}>
-             <button 
-               onClick={() => setIsUploadMenuOpen(!isUploadMenuOpen)}
+           <div ref={menuRef}>
+             <button
+               ref={uploadButtonRef}
+               onClick={() => {
+                 if (uploadButtonRef.current) {
+                   const rect = uploadButtonRef.current.getBoundingClientRect();
+                   setMenuPosition({ top: rect.bottom + 4, left: rect.left });
+                 }
+                 setIsUploadMenuOpen(!isUploadMenuOpen);
+               }}
                className={`p-1.5 rounded-md transition-colors ${isUploadMenuOpen ? 'bg-gray-200 text-finder-text-primary' : 'text-finder-text-secondary hover:bg-gray-200/50 hover:text-finder-text-primary'}`}
                title="New"
              >
                <Plus size={18} />
              </button>
-             
-             {isUploadMenuOpen && (
-               <div className="absolute top-full left-0 mt-1 w-32 bg-white rounded-lg shadow-xl border border-gray-200 py-1 z-50 overflow-hidden flex flex-col">
-                 <button 
+
+             {isUploadMenuOpen && typeof window !== 'undefined' && createPortal(
+               <div
+                 className="fixed w-32 bg-white dark:bg-gray-800 rounded-lg shadow-xl border border-gray-200 dark:border-gray-700 py-1 z-[9999] overflow-hidden flex flex-col"
+                 style={{ top: menuPosition.top, left: menuPosition.left }}
+               >
+                 <button
                    onClick={() => fileInputRef.current?.click()}
-                   className="px-3 py-2 text-left text-sm hover:bg-finder-hover flex items-center gap-2 text-gray-700"
+                   className="px-3 py-2 text-left text-sm hover:bg-finder-hover flex items-center gap-2 text-gray-700 dark:text-gray-300"
                  >
                    <FileUp size={14} /> File
                  </button>
-                 <button 
+                 <button
                    onClick={() => folderInputRef.current?.click()}
-                   className="px-3 py-2 text-left text-sm hover:bg-finder-hover flex items-center gap-2 text-gray-700"
+                   className="px-3 py-2 text-left text-sm hover:bg-finder-hover flex items-center gap-2 text-gray-700 dark:text-gray-300"
                  >
                    <FolderUp size={14} /> Folder
                  </button>
-               </div>
+               </div>,
+               document.body
              )}
            </div>
 

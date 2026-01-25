@@ -661,11 +661,23 @@ export const useFinderStore = create<FinderState>()(persist((set, get) => ({
 
     // Execute uploads
     // We run them concurrently for better performance
-    const promises = newTasks.map((task, index) => 
-      processUpload(task, uploadedFiles[index]).catch(e => console.error(e))
+    const results = await Promise.allSettled(
+      newTasks.map((task, index) => processUpload(task, uploadedFiles[index]))
     );
 
-    await Promise.all(promises);
+    // Count successes and failures
+    const successCount = results.filter(r => r.status === 'fulfilled').length;
+    const failCount = results.filter(r => r.status === 'rejected').length;
+
+    // Show toast notification
+    if (failCount === 0) {
+      get().addToast(`${successCount} file(s) uploaded successfully`, 'success');
+    } else if (successCount === 0) {
+      get().addToast(`Failed to upload ${failCount} file(s)`, 'error');
+    } else {
+      get().addToast(`${successCount} uploaded, ${failCount} failed`, 'info');
+    }
+
     get().fetchFiles(get().currentPath);
   },
 

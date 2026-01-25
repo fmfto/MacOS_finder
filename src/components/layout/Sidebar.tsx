@@ -1,7 +1,7 @@
 'use client';
 
 import {
-  Clock, Trash2, HardDrive, Folder, X
+  Clock, Trash2, HardDrive, Folder, X, Grid
 } from 'lucide-react';
 import { usePathname, useRouter } from 'next/navigation';
 import Link from 'next/link';
@@ -82,6 +82,20 @@ export default function Sidebar() {
         "fixed top-0 left-0 h-full w-64 shadow-2xl",
         isSidebarOpen ? "translate-x-0" : "-translate-x-full"
       )}>
+      
+      {/* Portal Link Header */}
+      <div className="px-4 pt-2 pb-4 mb-2 border-b border-finder-border">
+        <a 
+          href="https://fm.pe.kr" 
+          className="flex items-center gap-2 p-2 rounded-lg hover:bg-finder-hover transition-colors text-finder-text-primary group"
+        >
+          <div className="p-1.5 bg-gray-200 rounded-md group-hover:bg-gray-300 transition-colors">
+            <Grid size={18} className="text-gray-600" />
+          </div>
+          <span className="font-semibold text-sm">FM Portal</span>
+        </a>
+      </div>
+
       <div className="px-2 space-y-6">
         {SIDEBAR_ITEMS.map((section, sectionIndex) => (
           <div key={section.category}>
