@@ -1,7 +1,7 @@
 'use client';
 
 import {
-  Clock, Trash2, HardDrive, Folder, X, Grid
+  Clock, Trash2, HardDrive, Folder, FolderOpen, X, Grid
 } from 'lucide-react';
 import { usePathname, useRouter } from 'next/navigation';
 import Link from 'next/link';
@@ -20,6 +20,7 @@ const SIDEBAR_ITEMS = [
     category: 'Locations',
     items: [
       { name: 'Root Storage', icon: HardDrive, path: '/drive/root' },
+      { name: 'File Browser', icon: FolderOpen, path: '/drive/filebrowser' },
       { name: 'Trash', icon: Trash2, path: '/drive/trash' },
     ]
   }

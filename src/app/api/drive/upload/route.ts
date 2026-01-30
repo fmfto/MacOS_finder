@@ -28,42 +28,62 @@ export async function POST(request: NextRequest) {
     // 1. 일반 업로드 (Chunk 헤더 없음)
     if (!chunkIndexStr || !totalChunksStr) {
       const filePath = path.join(targetDir, file.name);
-      if (file.stream) {
-        // @ts-ignore
-        const nodeStream = Readable.fromWeb(file.stream());
-        const writeStream = createWriteStream(filePath);
-        await pipeline(nodeStream, writeStream);
-      } else {
-        const arrayBuffer = await file.arrayBuffer();
-        const buffer = Buffer.from(arrayBuffer);
-        await fs.writeFile(filePath, buffer);
+      try {
+        if (file.stream) {
+          // @ts-ignore
+          const nodeStream = Readable.fromWeb(file.stream());
+          const writeStream = createWriteStream(filePath);
+          await pipeline(nodeStream, writeStream);
+        } else {
+          const arrayBuffer = await file.arrayBuffer();
+          const buffer = Buffer.from(arrayBuffer);
+          await fs.writeFile(filePath, buffer);
+        }
+      } catch (error) {
+        // Clean up partial file on error
+        try { await fs.unlink(filePath); } catch {}
+        throw error;
       }
       return NextResponse.json({ success: true });
     }
 
-    // 2. 분할 업로드 (Chunked Upload)
+    // 2. 분할 업로드 (Chunked Upload) - Streaming
     const chunkIndex = parseInt(chunkIndexStr);
     const totalChunks = parseInt(totalChunksStr);
     const tempFilePath = path.join(targetDir, `.${file.name}.uploading`);
     const finalFilePath = path.join(targetDir, file.name);
 
-    const arrayBuffer = await file.arrayBuffer();
-    const buffer = Buffer.from(arrayBuffer);
+    try {
+      if (file.stream) {
+        // Stream chunk directly to disk (append mode for subsequent chunks)
+        // @ts-ignore
+        const nodeStream = Readable.fromWeb(file.stream());
+        const writeStream = createWriteStream(tempFilePath, {
+          flags: chunkIndex === 0 ? 'w' : 'a',
+        });
+        await pipeline(nodeStream, writeStream);
+      } else {
+        // Fallback for environments without streaming
+        const arrayBuffer = await file.arrayBuffer();
+        const buffer = Buffer.from(arrayBuffer);
+        if (chunkIndex === 0) {
+          await fs.writeFile(tempFilePath, buffer);
+        } else {
+          await fs.appendFile(tempFilePath, buffer);
+        }
+      }
 
-    if (chunkIndex === 0) {
-      // 첫 번째 청크: 파일 생성 (기존 파일 덮어쓰기)
-      await fs.writeFile(tempFilePath, buffer);
-    } else {
-      // 이후 청크: 파일 끝에 추가
-      await fs.appendFile(tempFilePath, buffer);
+      // 마지막 청크인 경우: 임시 이름을 원래 이름으로 변경
+      if (chunkIndex === totalChunks - 1) {
+        await fs.rename(tempFilePath, finalFilePath);
+      }
+
+      return NextResponse.json({ success: true, chunkIndex });
+    } catch (error) {
+      // Clean up temp file on error
+      try { await fs.unlink(tempFilePath); } catch {}
+      throw error;
     }
-
-    // 마지막 청크인 경우: 임시 이름을 원래 이름으로 변경
-    if (chunkIndex === totalChunks - 1) {
-      await fs.rename(tempFilePath, finalFilePath);
-    }
-
-    return NextResponse.json({ success: true, chunkIndex });
 
   } catch (error) {
     console.error('Upload error:', error);

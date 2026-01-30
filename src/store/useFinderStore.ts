@@ -495,11 +495,10 @@ export const useFinderStore = create<FinderState>()(persist((set, get) => ({
   },
 
   uploadFiles: async (uploadedFiles, targetParentId) => {
-    console.log('Upload started:', uploadedFiles.length, 'files', 'Target:', targetParentId);
     const { currentPath } = get();
-    
+
     let pathString = '';
-    
+
     if (targetParentId) {
       if (targetParentId === 'root') {
         pathString = '';
@@ -512,13 +511,11 @@ export const useFinderStore = create<FinderState>()(persist((set, get) => ({
         }
       }
     } else {
-      const apiPath = (currentPath.length > 0 && currentPath[0] === 'root') 
-        ? currentPath.slice(1) 
+      const apiPath = (currentPath.length > 0 && currentPath[0] === 'root')
+        ? currentPath.slice(1)
         : currentPath;
       pathString = apiPath.join('/');
     }
-
-    console.log('Base upload path:', pathString);
 
     // Create tasks
     const newTasks: UploadTask[] = uploadedFiles.map(file => ({
@@ -528,15 +525,55 @@ export const useFinderStore = create<FinderState>()(persist((set, get) => ({
       status: 'pending',
     }));
 
-    set(state => ({ 
+    set(state => ({
       uploadTasks: [...state.uploadTasks, ...newTasks],
-      isUploadPanelOpen: true 
+      isUploadPanelOpen: true
     }));
+
+    // XHR helper with timeout and retry
+    const MAX_RETRIES = 3;
+    const XHR_TIMEOUT = 300_000; // 5 minutes
+
+    const xhrUpload = (formData: FormData, headers: Record<string, string> = {}): Promise<void> => {
+      return new Promise((resolve, reject) => {
+        const xhr = new XMLHttpRequest();
+        xhr.open('POST', '/api/drive/upload', true);
+        xhr.timeout = XHR_TIMEOUT;
+
+        for (const [key, value] of Object.entries(headers)) {
+          xhr.setRequestHeader(key, value);
+        }
+
+        xhr.onload = () => {
+          if (xhr.status >= 200 && xhr.status < 300) resolve();
+          else reject(new Error(xhr.statusText || `HTTP ${xhr.status}`));
+        };
+        xhr.onerror = () => reject(new Error('Network Error'));
+        xhr.ontimeout = () => reject(new Error('Upload timed out'));
+        xhr.send(formData);
+      });
+    };
+
+    const xhrUploadWithRetry = async (
+      formData: FormData,
+      headers: Record<string, string> = {},
+    ): Promise<void> => {
+      for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+        try {
+          await xhrUpload(formData, headers);
+          return;
+        } catch (err) {
+          if (attempt === MAX_RETRIES) throw err;
+          // Exponential backoff: 1s, 2s, 4s
+          await new Promise(r => setTimeout(r, 1000 * Math.pow(2, attempt)));
+        }
+      }
+    };
 
     // Function to process a single file upload
     const processUpload = async (task: UploadTask, file: File) => {
-      const CHUNK_SIZE = 50 * 1024 * 1024; // 50MB per chunk to stay well under 100MB Cloudflare limit
-      
+      const CHUNK_SIZE = 10 * 1024 * 1024; // 10MB per chunk
+
       let finalPath = pathString;
       // @ts-ignore
       const relativePath = file.webkitRelativePath;
@@ -548,122 +585,129 @@ export const useFinderStore = create<FinderState>()(persist((set, get) => ({
         }
       }
 
-      // Small file (< 50MB) -> Direct Upload
+      // Small file (< 10MB) -> Direct Upload with progress
       if (file.size <= CHUNK_SIZE) {
-        return new Promise<void>((resolve, reject) => {
-          const formData = new FormData();
-          formData.append('file', file);
-          formData.append('path', finalPath);
+        const uploadWithProgress = (attempt: number): Promise<void> => {
+          return new Promise((resolve, reject) => {
+            const formData = new FormData();
+            formData.append('file', file);
+            formData.append('path', finalPath);
 
-          const xhr = new XMLHttpRequest();
-          xhr.open('POST', '/api/drive/upload', true);
+            const xhr = new XMLHttpRequest();
+            xhr.open('POST', '/api/drive/upload', true);
+            xhr.timeout = XHR_TIMEOUT;
 
-          xhr.upload.onprogress = (e) => {
-            if (e.lengthComputable) {
-              const percent = Math.round((e.loaded / e.total) * 100);
-              set(state => ({
-                uploadTasks: state.uploadTasks.map(t => 
-                  t.id === task.id ? { ...t, progress: percent, status: 'uploading' } : t
-                )
-              }));
-            }
-          };
+            xhr.upload.onprogress = (e) => {
+              if (e.lengthComputable) {
+                const percent = Math.round((e.loaded / e.total) * 100);
+                set(state => ({
+                  uploadTasks: state.uploadTasks.map(t =>
+                    t.id === task.id ? { ...t, progress: percent, status: 'uploading' } : t
+                  )
+                }));
+              }
+            };
 
-          xhr.onload = () => {
-            if (xhr.status >= 200 && xhr.status < 300) {
-              set(state => ({
-                uploadTasks: state.uploadTasks.map(t => 
-                  t.id === task.id ? { ...t, progress: 100, status: 'completed' } : t
-                )
-              }));
-              resolve();
-            } else {
-              set(state => ({
-                uploadTasks: state.uploadTasks.map(t => 
-                  t.id === task.id ? { ...t, status: 'error', error: xhr.statusText || 'Upload failed' } : t
-                )
-              }));
-              reject(new Error(xhr.statusText));
-            }
-          };
+            xhr.onload = () => {
+              if (xhr.status >= 200 && xhr.status < 300) resolve();
+              else reject(new Error(xhr.statusText || `HTTP ${xhr.status}`));
+            };
+            xhr.onerror = () => reject(new Error('Network Error'));
+            xhr.ontimeout = () => reject(new Error('Upload timed out'));
+            xhr.send(formData);
+          });
+        };
 
-          xhr.onerror = () => {
+        for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+          try {
+            await uploadWithProgress(attempt);
             set(state => ({
-              uploadTasks: state.uploadTasks.map(t => 
-                t.id === task.id ? { ...t, status: 'error', error: 'Network Error' } : t
+              uploadTasks: state.uploadTasks.map(t =>
+                t.id === task.id ? { ...t, progress: 100, status: 'completed' } : t
               )
             }));
-            reject(new Error('Network Error'));
-          };
-
-          xhr.send(formData);
-        });
+            return;
+          } catch (err) {
+            if (attempt === MAX_RETRIES) throw err;
+            await new Promise(r => setTimeout(r, 1000 * Math.pow(2, attempt)));
+          }
+        }
+        return;
       }
 
-      // Large file -> Chunked Upload
+      // Large file -> Chunked Upload with retry per chunk
       const totalChunks = Math.ceil(file.size / CHUNK_SIZE);
-      
-      try {
-        for (let i = 0; i < totalChunks; i++) {
-          const start = i * CHUNK_SIZE;
-          const end = Math.min(start + CHUNK_SIZE, file.size);
-          const chunk = file.slice(start, end);
-          
-          const formData = new FormData();
-          formData.append('file', chunk, file.name); // Important: backend uses filename from this
-          formData.append('path', finalPath);
-          
-          await new Promise<void>((resolve, reject) => {
-              const xhr = new XMLHttpRequest();
-              xhr.open('POST', '/api/drive/upload', true);
-              xhr.setRequestHeader('x-chunk-index', i.toString());
-              xhr.setRequestHeader('x-total-chunks', totalChunks.toString());
-              
-              xhr.upload.onprogress = (e) => {
-                if (e.lengthComputable) {
-                  // Calculate Global Progress
-                  // e.loaded is progress of CURRENT chunk
-                  const totalLoaded = (i * CHUNK_SIZE) + e.loaded;
-                  const percent = Math.min(100, Math.round((totalLoaded / file.size) * 100));
-                  
-                  set(state => ({
-                      uploadTasks: state.uploadTasks.map(t => 
-                        t.id === task.id ? { ...t, progress: percent, status: 'uploading' } : t
-                      )
-                  }));
-                }
-              };
-              
-              xhr.onload = () => {
-                if (xhr.status >= 200 && xhr.status < 300) resolve();
-                else reject(new Error(xhr.statusText));
-              };
-              xhr.onerror = () => reject(new Error('Network Error'));
-              xhr.send(formData);
-          });
+
+      for (let i = 0; i < totalChunks; i++) {
+        const start = i * CHUNK_SIZE;
+        const end = Math.min(start + CHUNK_SIZE, file.size);
+        const chunk = file.slice(start, end);
+
+        // Use retry wrapper for each chunk (no per-chunk progress to keep it simple with retry)
+        const formData = new FormData();
+        formData.append('file', chunk, file.name);
+        formData.append('path', finalPath);
+
+        // Update progress before sending chunk
+        const chunkStartPercent = Math.round((start / file.size) * 100);
+        set(state => ({
+          uploadTasks: state.uploadTasks.map(t =>
+            t.id === task.id ? { ...t, progress: chunkStartPercent, status: 'uploading' } : t
+          )
+        }));
+
+        await xhrUploadWithRetry(formData, {
+          'x-chunk-index': i.toString(),
+          'x-total-chunks': totalChunks.toString(),
+        });
+
+        // Update progress after chunk complete
+        const chunkEndPercent = Math.min(100, Math.round((end / file.size) * 100));
+        set(state => ({
+          uploadTasks: state.uploadTasks.map(t =>
+            t.id === task.id ? { ...t, progress: chunkEndPercent } : t
+          )
+        }));
+      }
+
+      // All chunks finished
+      set(state => ({
+        uploadTasks: state.uploadTasks.map(t =>
+          t.id === task.id ? { ...t, progress: 100, status: 'completed' } : t
+        )
+      }));
+    };
+
+    // Concurrency-limited upload queue (max 3 concurrent)
+    const MAX_CONCURRENT = 3;
+    const queue = newTasks.map((task, index) => ({ task, file: uploadedFiles[index] }));
+    const results: PromiseSettledResult<void>[] = [];
+    let queueIndex = 0;
+
+    const runNext = async (): Promise<void> => {
+      while (queueIndex < queue.length) {
+        const idx = queueIndex++;
+        const { task, file } = queue[idx];
+        try {
+          await processUpload(task, file);
+          results[idx] = { status: 'fulfilled', value: undefined };
+        } catch (e: any) {
+          set(state => ({
+            uploadTasks: state.uploadTasks.map(t =>
+              t.id === task.id ? { ...t, status: 'error', error: e?.message || 'Upload Failed' } : t
+            )
+          }));
+          results[idx] = { status: 'rejected', reason: e };
         }
-        
-        // All chunks finished
-        set(state => ({
-          uploadTasks: state.uploadTasks.map(t => 
-            t.id === task.id ? { ...t, progress: 100, status: 'completed' } : t
-          )
-        }));
-      } catch (e) {
-        console.error(e);
-        set(state => ({
-          uploadTasks: state.uploadTasks.map(t => 
-            t.id === task.id ? { ...t, status: 'error', error: 'Upload Failed' } : t
-          )
-        }));
       }
     };
 
-    // Execute uploads
-    // We run them concurrently for better performance
-    const results = await Promise.allSettled(
-      newTasks.map((task, index) => processUpload(task, uploadedFiles[index]))
+    // Start up to MAX_CONCURRENT workers
+    const workers = Array.from(
+      { length: Math.min(MAX_CONCURRENT, queue.length) },
+      () => runNext()
     );
+    await Promise.all(workers);
 
     // Count successes and failures
     const successCount = results.filter(r => r.status === 'fulfilled').length;

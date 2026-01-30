@@ -2,6 +2,9 @@ import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
   output: 'standalone',
+  serverActions: {
+    bodySizeLimit: '100mb',
+  },
   typescript: {
     // !! WARN !!
     // Dangerously allow production builds to successfully complete even if

@@ -18,3 +18,15 @@ services:
     # 서버의 사용자(fm)의 UID:GID를 사용해야 파일 쓰기 권한 문제가 안 생깁니다.
     # 보통 Ubuntu 첫 번째 유저는 1000:1000 입니다.
     user: "1000:1000"
+
+  filebrowser:
+    container_name: filebrowser
+    image: filebrowser/filebrowser:latest
+    restart: always
+    ports:
+      - "3002:80"
+    volumes:
+      - /data/nas:/srv
+      - ./filebrowser/filebrowser.db:/database/filebrowser.db
+      - ./filebrowser/settings.json:/config/settings.json
+    user: "1000:1000"
