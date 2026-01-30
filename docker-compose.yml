@@ -24,7 +24,7 @@ services:
     image: filebrowser/filebrowser:latest
     restart: always
     ports:
-      - "3002:80"
+      - "3003:80"
     volumes:
       - /data/nas:/srv
       - ./filebrowser/filebrowser.db:/database/filebrowser.db
