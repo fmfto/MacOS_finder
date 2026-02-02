@@ -57,6 +57,7 @@ export async function moveToTrash(relativePath: string): Promise<TrashEntry> {
     throw new Error('Access denied: Invalid path');
   }
 
+  await ensureTrashDir();
   const stats = await fs.stat(fullPath);
   const name = path.basename(fullPath);
   const trashId = generateTrashId();
