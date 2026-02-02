@@ -105,6 +105,7 @@ interface FinderState {
 
   // Actions
   fetchFiles: (pathSegments: string[]) => Promise<void>;
+  fetchTrashFiles: () => Promise<void>;
   fetchTags: () => Promise<void>;
   updateTags: (path: string, newTags: string[]) => Promise<void>;
   
@@ -121,10 +122,10 @@ interface FinderState {
   closeContextMenu: () => void;
 
   // File Operations
-  moveFileToTrash: (fileId: string) => void;
-  restoreFromTrash: (fileId: string) => void;
-  emptyTrash: () => void;
-  permanentlyDelete: (fileId: string) => void;
+  moveFileToTrash: (fileId: string) => Promise<void>;
+  restoreFromTrash: (fileId: string) => Promise<void>;
+  emptyTrash: () => Promise<void>;
+  permanentlyDelete: (fileId: string) => Promise<void>;
   renameFile: (fileId: string, newName: string) => void;
   createFolder: (name: string) => Promise<void>;
   
@@ -251,7 +252,40 @@ export const useFinderStore = create<FinderState>()(persist((set, get) => ({
     }
   },
 
+  fetchTrashFiles: async () => {
+    set({ isLoading: true });
+    try {
+      const res = await fetch('/api/drive/trash');
+      if (!res.ok) throw new Error('Failed to fetch trash');
+      const trashFiles = await res.json();
+
+      const formattedFiles = trashFiles.map((f: any) => ({
+        ...f,
+        createdAt: new Date(f.createdAt),
+        updatedAt: new Date(f.updatedAt),
+        trashedAt: f.trashedAt ? new Date(f.trashedAt) : undefined,
+      }));
+
+      set((state) => ({
+        files: [
+          ...state.files.filter(f => !f.isTrashed),
+          ...formattedFiles
+        ],
+        isLoading: false,
+      }));
+    } catch (error) {
+      console.error(error);
+      set({ isLoading: false });
+    }
+  },
+
   fetchFiles: async (pathSegments) => {
+    // Delegate to trash-specific fetch when in trash view
+    if (pathSegments.length > 0 && pathSegments[0] === 'trash') {
+      get().fetchTrashFiles();
+      return;
+    }
+
     get().fetchTags();
     set({ isLoading: true });
     try {
@@ -274,7 +308,7 @@ export const useFinderStore = create<FinderState>()(persist((set, get) => ({
           return res.json();
         })
       );
-      
+
       let allNewFiles: FileNode[] = [];
       const fetchedParentIds = new Set<string>();
 
@@ -289,7 +323,7 @@ export const useFinderStore = create<FinderState>()(persist((set, get) => ({
           updatedAt: new Date(f.updatedAt),
           trashedAt: f.trashedAt ? new Date(f.trashedAt) : undefined,
         }));
-        
+
         allNewFiles = [...allNewFiles, ...formattedFiles];
       });
 
@@ -386,21 +420,91 @@ export const useFinderStore = create<FinderState>()(persist((set, get) => ({
   openContextMenu: (x, y, targetId) => set({ contextMenu: { isOpen: true, x, y, targetId } }),
   closeContextMenu: () => set({ contextMenu: { isOpen: false, x: 0, y: 0, targetId: null } }),
 
-  moveFileToTrash: (fileId) => get().permanentlyDelete(fileId),
-  restoreFromTrash: (fileId) => console.warn('Restore not implemented'),
-  emptyTrash: () => console.warn('Empty trash not implemented'),
-
-  permanentlyDelete: async (fileId) => {
+  moveFileToTrash: async (fileId) => {
     try {
       const res = await fetch('/api/drive/item', {
         method: 'DELETE',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ id: fileId })
       });
-      if (!res.ok) throw new Error('Delete failed');
-      
+      if (!res.ok) throw new Error('Move to trash failed');
+
+      // Remove from favorites if present
+      const { favorites } = get();
+      if (favorites.includes(fileId)) {
+        set({ favorites: favorites.filter(id => id !== fileId) });
+      }
+
       get().fetchFiles(get().currentPath);
-      set((state) => ({ selectedFiles: new Set() }));
+      set({ selectedFiles: new Set() });
+      get().addToast('Moved to Trash', 'success');
+    } catch (e) {
+      console.error(e);
+      get().addToast('Failed to move to trash', 'error');
+    }
+  },
+
+  restoreFromTrash: async (fileId) => {
+    try {
+      const res = await fetch('/api/drive/trash', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ trashIds: [fileId] })
+      });
+      if (!res.ok) throw new Error('Restore failed');
+
+      get().fetchFiles(get().currentPath);
+      set({ selectedFiles: new Set() });
+      get().addToast('Restored from Trash', 'success');
+    } catch (e) {
+      console.error(e);
+      get().addToast('Failed to restore item', 'error');
+    }
+  },
+
+  emptyTrash: async () => {
+    try {
+      const res = await fetch('/api/drive/trash', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ all: true })
+      });
+      if (!res.ok) throw new Error('Empty trash failed');
+
+      get().fetchFiles(get().currentPath);
+      set({ selectedFiles: new Set() });
+      get().addToast('Trash emptied', 'success');
+    } catch (e) {
+      console.error(e);
+      get().addToast('Failed to empty trash', 'error');
+    }
+  },
+
+  permanentlyDelete: async (fileId) => {
+    const { currentPath } = get();
+    const isTrashView = currentPath.length > 0 && currentPath[0] === 'trash';
+
+    try {
+      if (isTrashView) {
+        // In trash view, permanently delete from trash
+        const res = await fetch('/api/drive/trash', {
+          method: 'DELETE',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ trashIds: [fileId] })
+        });
+        if (!res.ok) throw new Error('Permanent delete failed');
+      } else {
+        // Outside trash view, use soft delete (move to trash)
+        const res = await fetch('/api/drive/item', {
+          method: 'DELETE',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ id: fileId })
+        });
+        if (!res.ok) throw new Error('Delete failed');
+      }
+
+      get().fetchFiles(currentPath);
+      set({ selectedFiles: new Set() });
       get().addToast('Deleted successfully', 'success');
     } catch (e) {
       console.error(e);

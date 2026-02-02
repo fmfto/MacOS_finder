@@ -2,6 +2,7 @@ import fs from 'fs/promises';
 import path from 'path';
 import mime from 'mime';
 import { FileNode } from '@/types/file';
+import { moveToTrash } from './trashSystem';
 
 // 1. NAS 루트 디렉토리 설정
 // 환경 변수가 없으면 프로젝트 루트의 'drive-root' 폴더를 사용
@@ -202,6 +203,13 @@ export async function deleteEntry(id: string): Promise<void> {
     console.error(`Failed to delete entry: ${fullPath}`, error);
     throw new Error('Failed to delete entry');
   }
+}
+
+// 11. Soft Delete (Move to Trash)
+export async function trashEntry(id: string): Promise<void> {
+  const fullPath = getFullPathFromId(id);
+  const relativePath = path.relative(ROOT_DIR, fullPath);
+  await moveToTrash(relativePath);
 }
 
 // End of file system utilities

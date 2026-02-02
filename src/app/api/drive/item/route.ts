@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { renameEntry, deleteEntry } from '@/lib/server/fsUtils';
+import { renameEntry, trashEntry } from '@/lib/server/fsUtils';
 
 export async function PATCH(request: NextRequest) {
   try {
@@ -27,10 +27,10 @@ export async function DELETE(request: NextRequest) {
       return NextResponse.json({ error: 'Missing id' }, { status: 400 });
     }
 
-    await deleteEntry(id);
+    await trashEntry(id);
     return NextResponse.json({ success: true });
   } catch (error) {
-    console.error('Delete error:', error);
-    return NextResponse.json({ error: 'Failed to delete item' }, { status: 500 });
+    console.error('Trash error:', error);
+    return NextResponse.json({ error: 'Failed to move item to trash' }, { status: 500 });
   }
 }
